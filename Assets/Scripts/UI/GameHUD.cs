@@ -37,10 +37,14 @@ public class GameHUD : MonoBehaviour
     // Divider line (split-screen centre)
     private Image _centreDivider;
 
+    // Moves list (top-left)
+    private Text  _movesList;
+
     // ─────────────────────────────────────────────────────────────────────
     void Start()
     {
         BuildHUD();
+        UpdateMovesList();
         StartCoroutine(FindPlayersLoop());
     }
 
@@ -135,6 +139,21 @@ public class GameHUD : MonoBehaviour
         dRT.anchorMin = new Vector2(0.499f, 0f);
         dRT.anchorMax = new Vector2(0.501f, 1f);
         dRT.offsetMin = dRT.offsetMax = Vector2.zero;
+
+        // ─── Moves list (top-left, Minecraft-style) ─────────────────────────
+        var movesPanel = CreatePanel("MovesPanel", new Vector2(0f, 0.82f), new Vector2(0.25f, 1f),
+            new Color(0f, 0f, 0f, 0.65f));
+
+        _movesList = CreateLabel(movesPanel, "", new Vector2(10f, -8f), 8, new Color(0.7f, 0.9f, 1f, 0.95f));
+        var mRT = _movesList.GetComponent<RectTransform>();
+        mRT.anchorMin = new Vector2(0f, 1f);
+        mRT.anchorMax = new Vector2(1f, 1f);
+        mRT.pivot = new Vector2(0f, 1f);
+        mRT.anchoredPosition = new Vector2(10f, -8f);
+        mRT.sizeDelta = new Vector2(-20f, 200f);
+        _movesList.alignment = TextAnchor.UpperLeft;
+        _movesList.horizontalOverflow = HorizontalWrapMode.Wrap;
+        _movesList.verticalOverflow = VerticalWrapMode.Overflow;
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -257,6 +276,46 @@ public class GameHUD : MonoBehaviour
         }
 
         _waveBanner.text = "";
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // MOVES LIST
+    // ─────────────────────────────────────────────────────────────────────
+    void UpdateMovesList()
+    {
+        if (_movesList == null) return;
+
+        // Detect if using gamepad
+        bool hasGamepad = UnityEngine.InputSystem.Gamepad.all.Count > 0;
+
+        if (hasGamepad)
+        {
+            _movesList.text = "CONTROLS\n\n" +
+                "<b>MOVE</b>\nLeft Stick\n\n" +
+                "<b>JUMP</b>\nSouth Btn\n\n" +
+                "<b>FLY</b>\nRight Stick Y\n\n" +
+                "<b>ATTACK</b>\nRB / RT\n\n" +
+                "<b>HEAVY</b>\nRT (hold)\n\n" +
+                "<b>DODGE</b>\nEast Btn\n\n" +
+                "<b>KI BEAM</b>\nLT (hold)\n\n" +
+                "<b>BLOCK</b>\nLB\n\n" +
+                "<b>WEAPON</b>\nLB (hold 1s)\n\n" +
+                "<b>LOCK-ON</b>\nR-Stick Btn";
+        }
+        else
+        {
+            _movesList.text = "CONTROLS\n\n" +
+                "<b>MOVE</b>\nWASD\n\n" +
+                "<b>FLY</b>\nE/Q\n\n" +
+                "<b>JUMP</b>\nSPACE\n\n" +
+                "<b>ATTACK</b>\nJ\n\n" +
+                "<b>HEAVY</b>\nK (hold)\n\n" +
+                "<b>DODGE</b>\nSHIFT\n\n" +
+                "<b>KI BEAM</b>\nL (hold)\n\n" +
+                "<b>BLOCK</b>\nI\n\n" +
+                "<b>WEAPON</b>\nU (hold 1s)\n\n" +
+                "<b>LOCK-ON</b>\nF";
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────
