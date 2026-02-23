@@ -63,7 +63,6 @@ public class NinjaController : MonoBehaviour
     private Transform   _lockedTarget;
     private GhostAI     _ghostAI;
     private LaserBeam   _laser;
-    private bool        _lastDodgeLeft     = false;
     private Vector3     _moveInput;
     private float       _verticalInput;
     private bool        _jumpPressed;

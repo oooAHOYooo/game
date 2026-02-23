@@ -133,7 +133,7 @@ public class LaserBeam : MonoBehaviour
         main.maxParticles  = isUltra ? 60 : 20;
 
         var emit = ps.emission;
-        emit.SetBursts(new[] { new ParticleSystem.Burst(0f, main.maxParticles.constant) });
+        emit.SetBursts(new[] { new ParticleSystem.Burst(0f, (short)main.maxParticles) });
         emit.rateOverTime = 0;
 
         var shape = ps.shape;
@@ -159,7 +159,7 @@ public class LaserBeam : MonoBehaviour
         main.maxParticles  = isUltra ? 150 : 60;
 
         var emit = ps.emission;
-        emit.SetBursts(new[] { new ParticleSystem.Burst(0f, main.maxParticles.constant) });
+        emit.SetBursts(new[] { new ParticleSystem.Burst(0f, (short)main.maxParticles) });
         emit.rateOverTime = 0;
 
         var shape = ps.shape;

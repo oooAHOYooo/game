@@ -91,20 +91,18 @@ public class GameBootstrapper : MonoBehaviour
         var sunLight = sunObj.AddComponent<Light>();
         sunLight.type      = LightType.Directional;
         sunLight.color     = new Color(1.00f, 0.85f, 0.55f);
-        sunLight.intensity = 1f;
+        sunLight.intensity = 30000f;
         sunObj.transform.rotation = Quaternion.Euler(25f, -30f, 0);
-        var hdLight = sunObj.AddComponent<HDAdditionalLightData>();
-        hdLight.intensity = 30000f;
+        sunObj.AddComponent<HDAdditionalLightData>();
 
         // Cool fill (blue sky bounce)
         var fillObj = new GameObject("DirectionalLight_Fill");
         var fillLight = fillObj.AddComponent<Light>();
         fillLight.type      = LightType.Directional;
         fillLight.color     = new Color(0.40f, 0.55f, 0.90f);
-        fillLight.intensity = 0.15f;
+        fillLight.intensity = 5000f;
         fillObj.transform.rotation = Quaternion.Euler(70f, 120f, 0);
-        var hdFill = fillObj.AddComponent<HDAdditionalLightData>();
-        hdFill.intensity = 5000f;
+        fillObj.AddComponent<HDAdditionalLightData>();
 
         // Cinematic accent point lights around the island
         CreatePointLight(new Vector3( 60f, 15f,  60f), PaletteCrimson, 8000f, 60f);
@@ -120,9 +118,9 @@ public class GameBootstrapper : MonoBehaviour
         var l   = obj.AddComponent<Light>();
         l.type  = LightType.Point;
         l.color = color;
+        l.intensity = intensity;
         obj.transform.position = pos;
         var hd = obj.AddComponent<HDAdditionalLightData>();
-        hd.intensity = intensity;
         hd.range     = range;
     }
 

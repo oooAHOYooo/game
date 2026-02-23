@@ -280,8 +280,8 @@ public class Village : MonoBehaviour
             var fl = lightObj.AddComponent<Light>();
             fl.type  = LightType.Point;
             fl.color = FireOrange;
+            fl.intensity = 800f;
             var hdl = lightObj.AddComponent<UnityEngine.Rendering.HighDefinition.HDAdditionalLightData>();
-            hdl.intensity = 800f;
             hdl.range     = 5f;
         }
     }

@@ -21,8 +21,6 @@ public class WaveManager : MonoBehaviour
     // ── State ─────────────────────────────────────────────────────────────
     public  int    CurrentWave    = 0;
     private int    _aliveCount    = 0;
-    private bool   _waveActive    = false;
-    private bool   _inIntermission = false;
 
     // Engagement queue
     private Queue<EnemyBase>  _engageQueue  = new Queue<EnemyBase>();
@@ -57,7 +55,6 @@ public class WaveManager : MonoBehaviour
         _allEnemies.Clear();
         _engageQueue.Clear();
         _activeEnemy = null;
-        _waveActive  = true;
 
         int count     = GetWaveSize(waveIndex);
         var enemyList = BuildWaveComposition(waveIndex, count);
@@ -138,7 +135,6 @@ public class WaveManager : MonoBehaviour
     {
         while (_aliveCount > 0) yield return new WaitForSeconds(0.1f);
 
-        _waveActive = false;
 
         // Celebration VFX
         SpawnClearVFX();
@@ -158,7 +154,6 @@ public class WaveManager : MonoBehaviour
 
     IEnumerator Intermission()
     {
-        _inIntermission = true;
 
         var hud = FindAnyObjectByType<GameHUD>();
         for (int i = Mathf.RoundToInt(IntermissionDuration); i > 0; i--)
@@ -167,7 +162,6 @@ public class WaveManager : MonoBehaviour
             yield return new WaitForSeconds(1f);
         }
 
-        _inIntermission = false;
     }
 
     // ─────────────────────────────────────────────────────────────────────
