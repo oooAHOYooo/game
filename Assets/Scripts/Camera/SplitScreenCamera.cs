@@ -10,13 +10,13 @@ public class SplitScreenCamera : MonoBehaviour
     // ── Configuration ─────────────────────────────────────────────────────
     [Header("Follow")]
     public Transform TargetTransform;
-    public Vector3   Offset        = new Vector3(0f, 8f, -14f);
-    public float     SmoothTime    = 0.25f;
+    public Vector3   Offset        = new Vector3(0f, 4.5f, -8.5f);
+    public float     SmoothTime    = 0.18f;
 
     [Header("Zoom")]
-    public float BaseFOV           = 60f;
-    public float MaxFOV            = 80f;   // zoomed out when sprinting / flying
-    public float FOVLerpSpeed      = 4f;
+    public float BaseFOV           = 50f;
+    public float MaxFOV            = 75f;   // zoomed out when sprinting / flying
+    public float FOVLerpSpeed      = 5f;
 
     [Header("Shake")]
     public float ShakeMagnitude    = 0.3f;

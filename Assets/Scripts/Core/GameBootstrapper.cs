@@ -204,7 +204,15 @@ public class GameBootstrapper : MonoBehaviour
         SetHDRPEmission(scarfMat, bodyColor, 2f);
         scarf.GetComponent<Renderer>().material = scarfMat;
 
-        // ── Weapon (sword/staff) ──
+        // ── Arms (capsules) ──
+    CreateLimb(root.transform, "ArmL", new Vector3(-0.45f, 1.35f, 0), new Vector3(0.18f, 0.45f, 0.18f), bodyMat);
+    CreateLimb(root.transform, "ArmR", new Vector3( 0.45f, 1.35f, 0), new Vector3(0.18f, 0.45f, 0.18f), bodyMat);
+
+    // ── Legs (capsules) ──
+    CreateLimb(root.transform, "LegL", new Vector3(-0.22f, 0.45f, 0), new Vector3(0.22f, 0.5f, 0.22f), bodyMat);
+    CreateLimb(root.transform, "LegR", new Vector3( 0.22f, 0.45f, 0), new Vector3(0.22f, 0.5f, 0.22f), bodyMat);
+
+    // ── Weapon (sword/staff) ──
         var weaponHolder = new GameObject("WeaponHolder");
         weaponHolder.transform.SetParent(root.transform);
         weaponHolder.transform.localPosition = new Vector3(0.5f, 1.2f, 0);
@@ -253,6 +261,17 @@ public class GameBootstrapper : MonoBehaviour
         mat.color = Color.white;
         SetHDRPEmission(mat, color, 12f);
         eye.GetComponent<Renderer>().material = mat;
+    }
+
+    void CreateLimb(Transform parent, string name, Vector3 localPos, Vector3 scale, Material mat)
+    {
+        var limb = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+        limb.name = name;
+        limb.transform.SetParent(parent);
+        limb.transform.localPosition = localPos;
+        limb.transform.localScale    = scale;
+        Destroy(limb.GetComponent<Collider>());
+        limb.GetComponent<Renderer>().material = mat;
     }
 
     GameObject BuildWeapon(Transform parent, bool asStaff, Color playerColor)
