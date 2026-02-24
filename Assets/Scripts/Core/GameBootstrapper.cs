@@ -489,4 +489,26 @@ public class GameBootstrapper : MonoBehaviour
         // Fallback for Standard shader
         mat.SetColor("_EmissionColor", emissionColor * intensity);
     }
+
+    // --- Menu Actions ---
+    public void StartGame()
+    {
+        var menu = FindAnyObjectByType<MenuManager>();
+        if (menu != null) menu.HideMenu();
+        
+        // Show HUD
+        var hud = FindAnyObjectByType<GameHUD>();
+        if (hud != null) hud.gameObject.SetActive(true);
+        
+        Debug.Log("[GameBootstrapper] Game Started!");
+    }
+
+    public void QuitGame()
+    {
+        #if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+        #else
+        Application.Quit();
+        #endif
+    }
 }

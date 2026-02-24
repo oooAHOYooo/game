@@ -18,9 +18,15 @@
 /[Oo]bj/
 /[Bb]uild/
 /[Bb]uilds/
+!Builds/RPi/
 /[Ll]ogs/
 /[Uu]ser[Ss]ettings/
 .utmp/
+.utmp.meta
+# Diagnostics
+sysinfo.txt
+build_timestamp.txt
+NinjaStrike.x86_64
 
 # ── OS / IDE noise ───────────────────────────────────────────
 .vs/
