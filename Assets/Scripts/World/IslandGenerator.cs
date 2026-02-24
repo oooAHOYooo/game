@@ -10,7 +10,7 @@ public class IslandGenerator : MonoBehaviour
     public const float IslandRadius     = 150f;    // total radius of the island
     public const float TerrainSize      = 300f;    // terrain plane size
     public const float MaxHeight        = 18f;     // peak height
-    public const float WaterLevel       = 0.3f;    // y-level of ocean surface
+    public const float WaterLevel       = 0.3f;    // y-level of ocean surface (referenced by GameSettings, but const here for internal mesh logic if needed)
     public const int   TerrainRes       = 128;     // mesh resolution
 
     // ── Palette ───────────────────────────────────────────────────────────
@@ -32,8 +32,8 @@ public class IslandGenerator : MonoBehaviour
         BuildTerrain();
         BuildOcean();
         BuildBeachRing();
-        PlaceTrees(120);
-        PlaceRocks(50);
+        PlaceTrees(GameSettings.TreeCount);
+        PlaceRocks(GameSettings.RockCount);
         PlaceGrassPatches(80);
         BuildSkybox();
     }
@@ -82,7 +82,7 @@ public class IslandGenerator : MonoBehaviour
 
                 // Island falloff — circular distance from centre
                 float distFromCentre = Mathf.Sqrt(xPos * xPos + zPos * zPos);
-                float falloff = 1f - Mathf.Clamp01(distFromCentre / (IslandRadius * 0.85f));
+                float falloff = 1f - Mathf.Clamp01(distFromCentre / (GameSettings.IslandRadius * 0.85f));
                 falloff = falloff * falloff; // smooth edges
 
                 // Multi-octave Perlin noise
@@ -93,7 +93,7 @@ public class IslandGenerator : MonoBehaviour
                 height += Mathf.PerlinNoise(nx * 1.0f, nz * 1.0f) * 1.0f;
                 height += Mathf.PerlinNoise(nx * 2.3f, nz * 2.3f) * 0.5f;
                 height += Mathf.PerlinNoise(nx * 5.1f, nz * 5.1f) * 0.15f;
-                height *= MaxHeight * falloff;
+                height *= GameSettings.TerrainMaxHeight * falloff;
 
                 // Flatten the village area (centre) slightly
                 float villageFlatten = Mathf.Clamp01(1f - distFromCentre / 30f);
@@ -105,7 +105,7 @@ public class IslandGenerator : MonoBehaviour
                 // Vertex colour for terrain tinting
                 if (height < WaterLevel + 0.5f)
                     colors[i] = SandColor;        // beach
-                else if (height > MaxHeight * 0.65f)
+                else if (height > GameSettings.TerrainMaxHeight * 0.65f)
                     colors[i] = RockGray;         // rocky peaks
                 else
                     colors[i] = Color.Lerp(GrassGreen, GrassDark, Mathf.PerlinNoise(nx * 3f, nz * 3f));
@@ -165,6 +165,7 @@ public class IslandGenerator : MonoBehaviour
         shimmer.transform.position = new Vector3(0, WaterLevel + 0.1f, 0);
         var ps   = shimmer.AddComponent<ParticleSystem>();
         var main = ps.main;
+        ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear); // Ensure it doesn't auto-play before setup
         main.loop            = true;
         main.duration        = 5f;
         main.startLifetime   = 3f;
@@ -224,47 +225,16 @@ public class IslandGenerator : MonoBehaviour
 
     void BuildTree(Vector3 pos)
     {
-        var tree = new GameObject("Tree");
-        tree.transform.SetParent(IslandRoot);
-        tree.transform.position = pos;
-        float scale = Random.Range(0.8f, 1.4f);
-
-        // Trunk
-        var trunk = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-        trunk.name = "Trunk";
-        trunk.transform.SetParent(tree.transform);
-        trunk.transform.localPosition = Vector3.up * 1.5f * scale;
-        trunk.transform.localScale    = new Vector3(0.4f * scale, 1.5f * scale, 0.4f * scale);
-        Destroy(trunk.GetComponent<Collider>());
-        var trunkMat = new Material(GameBootstrapper.GetHDRPLitShader());
-        trunkMat.color = new Color(0.25f, 0.15f, 0.05f);
-        trunk.GetComponent<Renderer>().material = trunkMat;
-
-        // Canopy (2-3 spheres)
-        int canopyLayers = Random.Range(2, 4);
-        for (int j = 0; j < canopyLayers; j++)
-        {
-            var leaf = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            leaf.name = "Canopy";
-            leaf.transform.SetParent(tree.transform);
-            float leafScale = Random.Range(1.8f, 3.2f) * scale;
-            leaf.transform.localPosition = new Vector3(
-                Random.Range(-0.5f, 0.5f) * scale,
-                (3f + j * 0.8f) * scale,
-                Random.Range(-0.5f, 0.5f) * scale);
-            leaf.transform.localScale = new Vector3(leafScale, leafScale * 0.7f, leafScale);
-            Destroy(leaf.GetComponent<Collider>());
-            var leafMat = new Material(GameBootstrapper.GetHDRPLitShader());
-            leafMat.color = Color.Lerp(GrassGreen, GrassDark, Random.Range(0f, 1f));
-            GameBootstrapper.SetHDRPEmission(leafMat, new Color(0.05f, 0.15f, 0.02f), 0.5f);
-            leaf.GetComponent<Renderer>().material = leafMat;
-        }
-
-        // Collider on tree trunk for the world
-        var col = tree.AddComponent<CapsuleCollider>();
-        col.height = 4f * scale;
-        col.radius = 0.5f * scale;
-        col.center = Vector3.up * 2f * scale;
+        var treeObj = new GameObject("StylizedTree");
+        treeObj.transform.SetParent(IslandRoot);
+        treeObj.transform.position = pos;
+        
+        var bp = treeObj.AddComponent<StylizedTreeBP>();
+        bp.Height = Random.Range(5f, 9f);
+        bp.Curvature = Random.Range(1f, 2.5f);
+        bp.Generate();
+        
+        treeObj.AddComponent<SnapToTerrain>();
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -277,22 +247,16 @@ public class IslandGenerator : MonoBehaviour
             Vector3 pos = GetRandomIslandPosition(10f, IslandRadius * 0.8f);
             if (pos.y < WaterLevel + 0.3f) continue;
 
-            var rock = GameObject.CreatePrimitive(
-                Random.value > 0.5f ? PrimitiveType.Cube : PrimitiveType.Sphere);
-            rock.name = "Rock";
-            rock.transform.SetParent(IslandRoot);
-            rock.transform.position   = pos;
-            float s = Random.Range(0.8f, 3.5f);
-            rock.transform.localScale = new Vector3(
-                s * Random.Range(0.7f, 1.3f),
-                s * Random.Range(0.5f, 1.0f),
-                s * Random.Range(0.7f, 1.3f));
-            rock.transform.rotation = Quaternion.Euler(
-                Random.Range(-20f, 20f), Random.Range(0, 360f), Random.Range(-10f, 10f));
-
-            var mat = new Material(GameBootstrapper.GetHDRPLitShader());
-            mat.color = Color.Lerp(RockGray, new Color(0.45f, 0.42f, 0.38f), Random.Range(0f, 0.5f));
-            rock.GetComponent<Renderer>().material = mat;
+            var rockObj = new GameObject("StylizedRock");
+            rockObj.transform.SetParent(IslandRoot);
+            rockObj.transform.position = pos;
+            
+            var bp = rockObj.AddComponent<StylizedRockBP>();
+            bp.BlockCount = Random.Range(2, 5);
+            bp.Scale = Random.Range(1.5f, 4f);
+            bp.Generate();
+            
+            rockObj.AddComponent<SnapToTerrain>();
         }
     }
 
@@ -306,18 +270,16 @@ public class IslandGenerator : MonoBehaviour
             Vector3 pos = GetRandomIslandPosition(5f, IslandRadius * 0.7f);
             if (pos.y < WaterLevel + 0.6f) continue;
 
-            var patch = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            patch.name = "GrassPatch";
-            patch.transform.SetParent(IslandRoot);
-            patch.transform.position   = pos + Vector3.up * 0.15f;
-            patch.transform.localScale = new Vector3(
-                Random.Range(1f, 4f), 0.3f, Random.Range(1f, 4f));
-            patch.transform.rotation = Quaternion.Euler(0, Random.Range(0, 360f), 0);
-            Destroy(patch.GetComponent<Collider>());
-
-            var mat = new Material(GameBootstrapper.GetHDRPLitShader());
-            mat.color = Color.Lerp(GrassGreen, new Color(0.35f, 0.55f, 0.15f), Random.Range(0f, 0.7f));
-            patch.GetComponent<Renderer>().material = mat;
+            var grassObj = new GameObject("StylizedGrass");
+            grassObj.transform.SetParent(IslandRoot);
+            grassObj.transform.position = pos;
+            
+            var bp = grassObj.AddComponent<StylizedGrassBP>();
+            bp.BladeCount = Random.Range(8, 16);
+            bp.Radius = Random.Range(1f, 3f);
+            bp.Generate();
+            
+            grassObj.AddComponent<SnapToTerrain>();
         }
     }
 

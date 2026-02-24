@@ -90,7 +90,7 @@ public class LaserBeam : MonoBehaviour
                 if (enemy != null && !hitIds.Contains(enemy.GetInstanceID()))
                 {
                     hitIds.Add(enemy.GetInstanceID());
-                    float dmg = DamagePerTick * (isUltra ? 3f : 1f);
+                    float dmg = GameSettings.LaserDamagePerTick * (isUltra ? 3f : 1f);
                     enemy.TakeDamage(dmg, transform);
 
                     // Knockback from beam

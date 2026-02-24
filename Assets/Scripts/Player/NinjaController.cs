@@ -113,12 +113,20 @@ public class NinjaController : MonoBehaviour
         if (IsGhost) return; // Ghost is driven by GhostAI
 
         PollInput();
+        ApplySettings();
         HandleWeaponTransform();
         HandleDodgeCooldown();
         HandleKi();
         HandleLockOn();
         HandleAttackCooldown();
         HandleWeaponRotation();
+    }
+
+    void ApplySettings()
+    {
+        // Apply ninja scale
+        if (transform.localScale.x != GameSettings.NinjaScale)
+            transform.localScale = Vector3.one * GameSettings.NinjaScale;
     }
 
     void FixedUpdate()
@@ -135,47 +143,66 @@ public class NinjaController : MonoBehaviour
     // ─────────────────────────────────────────────────────────────────────
     // INPUT POLLING
     // ─────────────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────
     void PollInput()
     {
-        if (_pad == null)
+        // Reset per-frame triggers
+        _jumpPressed = false;
+        _dodgePressed = false;
+        _lightPressed = false;
+        _lockOnPressed = false;
+
+        if (IsGhost) return;
+
+        // COMBINED INPUT: Keyboard (P1) + Gamepad (by PlayerIndex)
+        Vector2 compositeMove = Vector2.zero;
+        Vector2 compositeVertical = Vector2.zero;
+
+        // 1. Keyboard (Player 1 Only)
+        if (PlayerIndex == 0 && Keyboard.current != null)
         {
-            // Keyboard fallback for P1
-            if (PlayerIndex == 0)
-            {
-                float h = (Input.GetKey(KeyCode.D) ? 1 : 0) - (Input.GetKey(KeyCode.A) ? 1 : 0);
-                float v = (Input.GetKey(KeyCode.W) ? 1 : 0) - (Input.GetKey(KeyCode.S) ? 1 : 0);
-                _moveInput      = new Vector3(h, 0, v);
-                _verticalInput  = (Input.GetKey(KeyCode.E) ? 1 : 0) - (Input.GetKey(KeyCode.Q) ? 1 : 0);
-                _jumpPressed    = Input.GetKeyDown(KeyCode.Space);
-                _dodgePressed   = Input.GetKeyDown(KeyCode.LeftShift);
-                _lightPressed   = Input.GetKeyDown(KeyCode.J);
-                _heavyHeld      = Input.GetKey(KeyCode.K);
-                _kiHeld         = Input.GetKey(KeyCode.L);
-                _blockHeld      = Input.GetKey(KeyCode.I);
-                _weaponTransformHeld = Input.GetKey(KeyCode.U);
-                _lockOnPressed  = Input.GetKeyDown(KeyCode.F);
-            }
-            RefreshGamepad();
-            return;
+            var k = Keyboard.current;
+            if (k.wKey.isPressed) compositeMove.y += 1;
+            if (k.sKey.isPressed) compositeMove.y -= 1;
+            if (k.aKey.isPressed) compositeMove.x -= 1;
+            if (k.dKey.isPressed) compositeMove.x += 1;
+
+            if (k.eKey.isPressed) _verticalInput = 1f;
+            else if (k.qKey.isPressed) _verticalInput = -1f;
+            else _verticalInput = 0f;
+
+            if (k.spaceKey.wasPressedThisFrame) _jumpPressed = true;
+            if (k.leftShiftKey.wasPressedThisFrame) _dodgePressed = true;
+            if (k.jKey.wasPressedThisFrame) _lightPressed = true;
+            _heavyHeld = k.kKey.isPressed;
+            _kiHeld = k.lKey.isPressed;
+            _blockHeld = k.iKey.isPressed;
+            _weaponTransformHeld = k.uKey.isPressed;
+            if (k.fKey.wasPressedThisFrame) _lockOnPressed = true;
         }
 
-        // New Input System gamepad
-        var ls = _pad.leftStick.ReadValue();
-        var rs = _pad.rightStick.ReadValue();
-
-        _moveInput   = new Vector3(ls.x, 0, ls.y);
-        _verticalInput = rs.y;   // right stick y = fly up/down
-
-        _jumpPressed          = _pad.buttonSouth.wasPressedThisFrame;
-        _dodgePressed         = _pad.buttonEast.wasPressedThisFrame;
-        _lightPressed         = _pad.rightShoulder.wasPressedThisFrame;
-        _heavyHeld            = _pad.rightTrigger.ReadValue() > 0.5f;
-        _kiHeld               = _pad.leftTrigger.ReadValue() > 0.5f;
-        _blockHeld            = _pad.leftShoulder.isPressed;
-        _lockOnPressed        = _pad.rightStickButton.wasPressedThisFrame;
-        _weaponTransformHeld  = _pad.buttonWest.isPressed;
-
+        // 2. Gamepad
         RefreshGamepad();
+        if (_pad != null)
+        {
+            var ls = _pad.leftStick.ReadValue();
+            var rs = _pad.rightStick.ReadValue();
+
+            // Override keyboard if stick is moved
+            if (ls.sqrMagnitude > 0.1f) compositeMove = ls;
+            if (Mathf.Abs(rs.y) > 0.1f) _verticalInput = rs.y;
+
+            if (_pad.buttonSouth.wasPressedThisFrame) _jumpPressed = true;
+            if (_pad.buttonEast.wasPressedThisFrame) _dodgePressed = true;
+            if (_pad.rightShoulder.wasPressedThisFrame) _lightPressed = true;
+            if (_pad.rightTrigger.ReadValue() > 0.5f) _heavyHeld = true;
+            if (_pad.leftTrigger.ReadValue() > 0.5f) _kiHeld = true;
+            if (_pad.leftShoulder.isPressed) _blockHeld = true;
+            if (_pad.rightStickButton.wasPressedThisFrame) _lockOnPressed = true;
+            if (_pad.buttonWest.isPressed) _weaponTransformHeld = true;
+        }
+
+        _moveInput = new Vector3(compositeMove.x, 0, compositeMove.y);
     }
 
     void RefreshGamepad()
@@ -199,7 +226,7 @@ public class NinjaController : MonoBehaviour
         Vector3 worldDir = camForward * _moveInput.z + camRight * _moveInput.x;
         worldDir.Normalize();
 
-        float speed = IsFlying ? AirSpeed : GroundSpeed;
+        float speed = IsFlying ? GameSettings.PlayerAirSpeed : GameSettings.PlayerGroundSpeed;
         _rb.linearDamping = IsFlying ? AirDrag : GroundDrag;
 
         Vector3 targetVel = worldDir * speed;
@@ -235,7 +262,7 @@ public class NinjaController : MonoBehaviour
         // Jump from ground
         if (_jumpPressed && IsGrounded && !IsFlying)
         {
-            _rb.AddForce(Vector3.up * JumpForce, ForceMode.VelocityChange);
+            _rb.AddForce(Vector3.up * JumpForce, ForceMode.VelocityChange); // Still using JumpForce field, but could move if needed
             IsFlying = true;
         }
 
@@ -244,7 +271,7 @@ public class NinjaController : MonoBehaviour
         {
             IsFlying = true;
 
-            if (_verticalInput > 0.3f && transform.position.y < MaxAltitude)
+            if (_verticalInput > 0.3f && transform.position.y < GameSettings.PlayerMaxFlightAltitude)
             {
                 _rb.AddForce(Vector3.up * AscendForce * _verticalInput, ForceMode.Acceleration);
             }
@@ -255,8 +282,14 @@ public class NinjaController : MonoBehaviour
             else if (IsFlying)
             {
                 // Hover — counteract gravity partially
-                float gravComp = -Physics.gravity.y * _rb.mass * 0.85f;
+                float gravComp = -Physics.gravity.y * _rb.mass * 0.85f * GameSettings.GravityMultiplier;
                 _rb.AddForce(Vector3.up * gravComp, ForceMode.Force);
+            }
+
+            // Apply extra gravity for "heavy" feel if not hovering/ascending
+            if (!IsGrounded)
+            {
+                _rb.AddForce(Physics.gravity * (GameSettings.GravityMultiplier - 1f), ForceMode.Acceleration);
             }
 
             // Landing check handled in CheckGrounded
@@ -266,9 +299,73 @@ public class NinjaController : MonoBehaviour
     void CheckGrounded()
     {
         bool wasGrounded = IsGrounded;
+        float fallSpeed = -_rb.linearVelocity.y;
+
         IsGrounded = Physics.Raycast(transform.position + Vector3.up * 0.1f, Vector3.down, 0.3f, LayerMask.GetMask("Default"));
+
         if (IsGrounded && !wasGrounded)
+        {
             IsFlying = false;
+
+            // STOMP MECHANIC
+            if (fallSpeed > GameSettings.StompHeightThreshold)
+            {
+                TriggerStomp(fallSpeed);
+            }
+        }
+    }
+
+    void TriggerStomp(float intensity)
+    {
+        // VFX
+        SpawnStompVFX();
+
+        // Shake camera
+        SplitScreenCamera.ShakeCamera(PlayerIndex, 0.4f, 0.5f);
+
+        // Physics Blast
+        float force = GameSettings.StompForce * (intensity * 0.5f);
+        float radius = GameSettings.StompRadius;
+
+        Collider[] hits = Physics.OverlapSphere(transform.position, radius);
+        foreach (var h in hits)
+        {
+            var rb = h.GetComponent<Rigidbody>();
+            if (rb != null && rb != _rb)
+            {
+                Vector3 dir = (h.transform.position - transform.position).normalized;
+                dir.y = 0.5f; // push up slightly
+                rb.AddForce(dir * force, ForceMode.Impulse);
+            }
+
+            var eb = h.GetComponentInParent<EnemyBase>();
+            if (eb != null) eb.TakeDamage(intensity * 2f, transform);
+        }
+    }
+
+    void SpawnStompVFX()
+    {
+        var obj = new GameObject("StompVFX");
+        obj.transform.position = transform.position;
+        var ps = obj.AddComponent<ParticleSystem>();
+        var main = ps.main;
+        main.startLifetime = 0.5f;
+        main.startSpeed = 15f;
+        main.startSize = 0.5f;
+        main.startColor = new Color(0.5f, 0.4f, 0.3f, 0.8f);
+        main.maxParticles = 50;
+        main.loop = false;
+
+        var em = ps.emission;
+        em.SetBursts(new[] { new ParticleSystem.Burst(0f, 50) });
+        em.rateOverTime = 0;
+
+        var shape = ps.shape;
+        shape.shapeType = ParticleSystemShapeType.Sphere;
+        shape.radius = 0.5f;
+
+        ps.Play();
+        Destroy(obj, 1f);
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -289,7 +386,7 @@ public class NinjaController : MonoBehaviour
         // Zero out opposing velocity on dodge axis for clean feel
         Vector3 vel = _rb.linearVelocity;
         _rb.linearVelocity = new Vector3(0, vel.y * 0.5f, 0);
-        _rb.AddForce(dodgeDir * DodgeForce, ForceMode.VelocityChange);
+        _rb.AddForce(dodgeDir * GameSettings.PlayerDodgeForce, ForceMode.VelocityChange);
 
         StartCoroutine(DodgeInvincibility(0.15f));
     }
@@ -342,7 +439,7 @@ public class NinjaController : MonoBehaviour
         // Lunge forward slightly
         _rb.AddForce(transform.forward * 5f, ForceMode.VelocityChange);
 
-        float damage = IsStaffMode ? StaffLightDamage : LightAttackDamage;
+        float damage = IsStaffMode ? GameSettings.StaffLightDamage : GameSettings.SwordLightDamage;
         float range  = IsStaffMode ? 2.5f : 1.8f;
         float angle  = IsStaffMode ? 180f : 90f;
 
@@ -360,7 +457,7 @@ public class NinjaController : MonoBehaviour
 
         chargeTime = Mathf.Clamp(chargeTime, 0.1f, 1.5f);
         float damageMultiplier = 1f + chargeTime;
-        float damage = (IsStaffMode ? StaffHeavyDamage : HeavyAttackDamage) * damageMultiplier;
+        float damage = (IsStaffMode ? GameSettings.StaffHeavyDamage : GameSettings.SwordHeavyDamage) * damageMultiplier;
 
         // Strong downward slam if in air
         if (IsFlying)
@@ -411,7 +508,7 @@ public class NinjaController : MonoBehaviour
                 StartCoroutine(ResetLaser());
             }
             // Regen
-            CurrentKi = Mathf.Min(KiMax, CurrentKi + KiRegen * Time.deltaTime);
+            CurrentKi = Mathf.Min(GameSettings.PlayerMaxKi, CurrentKi + GameSettings.KiRechargeRate * Time.deltaTime);
         }
 
         IsBlocking = _blockHeld;
@@ -587,5 +684,11 @@ public class NinjaController : MonoBehaviour
         float charge  = CurrentKi * 0.4f;
         _laser.Fire(charge);
         StartCoroutine(ResetLaser());
+    }
+
+    public Gamepad RefreshGamepadForInteractor()
+    {
+        RefreshGamepad();
+        return _pad;
     }
 }

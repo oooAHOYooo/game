@@ -79,20 +79,20 @@ public class SplitScreenCamera : MonoBehaviour
     {
         if (_cam == null) return;
 
-        float targetFOV = BaseFOV;
+        float targetFOV = GameSettings.CameraBaseFOV;
 
         var rb = TargetTransform != null ? TargetTransform.GetComponent<Rigidbody>() : null;
         if (rb != null)
         {
             float speed = rb.linearVelocity.magnitude;
-            targetFOV = Mathf.Lerp(BaseFOV, MaxFOV, Mathf.Clamp01(speed / 20f));
+            targetFOV = Mathf.Lerp(GameSettings.CameraBaseFOV, GameSettings.CameraMaxFOV, Mathf.Clamp01(speed / 20f));
         }
 
         var nc = TargetTransform != null ? TargetTransform.GetComponent<NinjaController>() : null;
         if (nc != null && nc.IsFiringLaser)
-            targetFOV = Mathf.Min(targetFOV + 8f, MaxFOV + 8f); // push FOV on laser fire
+            targetFOV = Mathf.Min(targetFOV + 8f, GameSettings.CameraMaxFOV + 8f); // push FOV on laser fire
 
-        _cam.fieldOfView = Mathf.Lerp(_cam.fieldOfView, targetFOV, FOVLerpSpeed * Time.deltaTime);
+        _cam.fieldOfView = Mathf.Lerp(_cam.fieldOfView, targetFOV, GameSettings.CameraFOVLerpSpeed * Time.deltaTime);
     }
 
     // ─────────────────────────────────────────────────────────────────────

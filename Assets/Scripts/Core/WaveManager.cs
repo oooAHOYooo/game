@@ -149,7 +149,7 @@ public class WaveManager : MonoBehaviour
         var hud = FindAnyObjectByType<GameHUD>();
         if (hud != null) hud.ShowWaveClear();
 
-        yield return new WaitForSeconds(WaveClearPause);
+        yield return new WaitForSeconds(GameSettings.WaveClearPause);
     }
 
     IEnumerator Intermission()
@@ -253,9 +253,9 @@ public class WaveManager : MonoBehaviour
             {
                 if (e == null || !e.IsAlive) continue;
                 float dist = Vector3.Distance(e.transform.position, IslandVillage.Centre);
-                if (dist < VillageDamageRadius)
+                if (dist < GameSettings.VillageDamageRadius)
                 {
-                    IslandVillage.TakeDamage(5f);  // chip damage per enemy per tick
+                    IslandVillage.TakeDamage(GameSettings.VillageDamagePerTick);  // chip damage per enemy per tick
                     break;  // only one tick per check
                 }
             }

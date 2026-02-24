@@ -78,38 +78,49 @@ public class GameBootstrapper : MonoBehaviour
     // ─────────────────────────────────────────────────────────────────────────
     void BuildLighting()
     {
-        // Ambient — cinematic golden-hour island feel
+        // Ambient — Dreamy, vibrant atmosphere
         RenderSettings.ambientMode  = AmbientMode.Flat;
-        RenderSettings.ambientLight = new Color(0.10f, 0.08f, 0.05f);
-        RenderSettings.fogColor     = new Color(0.20f, 0.15f, 0.10f);
+        RenderSettings.ambientLight = new Color(0.2f, 0.25f, 0.4f); // Brighter blue ambient
+        RenderSettings.fogColor     = new Color(0.4f, 0.6f, 0.8f); // Bright blue fog
         RenderSettings.fog          = true;
         RenderSettings.fogMode      = FogMode.ExponentialSquared;
-        RenderSettings.fogDensity   = 0.003f;  // lighter fog for open world
+        RenderSettings.fogDensity   = 0.002f;
 
-        // Sun — warm cinematic sunset
+        // Sun — High intensity for "glow" look
         var sunObj = new GameObject("DirectionalLight_Sun");
         var sunLight = sunObj.AddComponent<Light>();
         sunLight.type      = LightType.Directional;
-        sunLight.color     = new Color(1.00f, 0.85f, 0.55f);
-        sunLight.intensity = 30000f;
-        sunObj.transform.rotation = Quaternion.Euler(25f, -30f, 0);
-        sunObj.AddComponent<HDAdditionalLightData>();
+        sunLight.color     = new Color(1.00f, 0.95f, 0.85f);
+        sunLight.intensity = 100000f; // Significantly higher for HDRP bloom targets
+        sunObj.transform.rotation = Quaternion.Euler(35f, -40f, 0);
+        var hdSun = sunObj.AddComponent<HDAdditionalLightData>();
+        hdSun.intensity = 100000f;
 
-        // Cool fill (blue sky bounce)
+        // Fill Light - Vibrant Cyan/Blue
         var fillObj = new GameObject("DirectionalLight_Fill");
         var fillLight = fillObj.AddComponent<Light>();
         fillLight.type      = LightType.Directional;
-        fillLight.color     = new Color(0.40f, 0.55f, 0.90f);
-        fillLight.intensity = 5000f;
-        fillObj.transform.rotation = Quaternion.Euler(70f, 120f, 0);
-        fillObj.AddComponent<HDAdditionalLightData>();
+        fillLight.color     = new Color(0.2f, 0.8f, 1.0f);
+        fillLight.intensity = 20000f;
+        fillObj.transform.rotation = Quaternion.Euler(60f, 150f, 0);
+        var hdFill = fillObj.AddComponent<HDAdditionalLightData>();
+        hdFill.intensity = 20000f;
 
-        // Cinematic accent point lights around the island
-        CreatePointLight(new Vector3( 60f, 15f,  60f), PaletteCrimson, 8000f, 60f);
-        CreatePointLight(new Vector3(-60f, 15f, -60f), PaletteCyan,    8000f, 60f);
-        CreatePointLight(new Vector3( 60f, 15f, -60f), PaletteGold,    6000f, 50f);
-        CreatePointLight(new Vector3(-60f, 15f,  60f), PalettePurple,  6000f, 50f);
-        CreatePointLight(Vector3.up * 30f,             PaletteGold,    4000f, 80f);  // overhead warm
+        // Procedural Post-Processing (Bloom & Color)
+        var volObj = new GameObject("GlobalVolume");
+        var vol = volObj.AddComponent<Volume>();
+        vol.isGlobal = true;
+        var profile = ScriptableObject.CreateInstance<VolumeProfile>();
+        
+        var bloom = profile.Add<Bloom>();
+        bloom.intensity.Override(1.5f);
+        bloom.threshold.Override(0.5f);
+        
+        var colorAdjust = profile.Add<ColorAdjustments>();
+        colorAdjust.saturation.Override(30f);
+        colorAdjust.contrast.Override(20f);
+        
+        vol.profile = profile;
     }
 
     void CreatePointLight(Vector3 pos, Color color, float intensity, float range)
@@ -233,6 +244,7 @@ public class GameBootstrapper : MonoBehaviour
 
         // ── Player Controller Component ──
         var ctrl = root.AddComponent<NinjaController>();
+        root.AddComponent<EnvironmentInteractor>();
         ctrl.PlayerIndex      = playerIndex;
         ctrl.IsGhost          = isGhost;
         ctrl.BodyColor        = bodyColor;
@@ -369,6 +381,7 @@ public class GameBootstrapper : MonoBehaviour
         auraObj.transform.localPosition = new Vector3(0, 1f, 0);
         var ps   = auraObj.AddComponent<ParticleSystem>();
         var main = ps.main;
+        ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
         main.loop             = true;
         main.duration         = 1f;
         main.startLifetime    = 0.6f;
@@ -407,7 +420,7 @@ public class GameBootstrapper : MonoBehaviour
         cam1Obj.transform.LookAt(Vector3.zero);
         var camCtrl1 = cam1Obj.AddComponent<SplitScreenCamera>();
         camCtrl1.TargetTransform = _player1 != null ? _player1.transform : null;
-        camCtrl1.Offset          = new Vector3(0, 14f, -22f);  // higher + further for open world
+        camCtrl1.Offset          = GameSettings.CameraOffset;  // zoomed in by default
         cam1Obj.AddComponent<HDAdditionalCameraData>();
         cam1.farClipPlane = 600f;  // see the whole island
 
@@ -420,7 +433,7 @@ public class GameBootstrapper : MonoBehaviour
         cam2Obj.transform.LookAt(Vector3.zero);
         var camCtrl2 = cam2Obj.AddComponent<SplitScreenCamera>();
         camCtrl2.TargetTransform = _player2Ghost != null ? _player2Ghost.transform : null;
-        camCtrl2.Offset          = new Vector3(0, 14f, -22f);
+        camCtrl2.Offset          = GameSettings.CameraOffset;
         cam2Obj.AddComponent<HDAdditionalCameraData>();
         cam2.farClipPlane = 600f;
     }
@@ -437,6 +450,7 @@ public class GameBootstrapper : MonoBehaviour
         _uiRoot.AddComponent<UnityEngine.UI.CanvasScaler>();
         _uiRoot.AddComponent<UnityEngine.UI.GraphicRaycaster>();
         _uiRoot.AddComponent<GameHUD>();
+        _uiRoot.AddComponent<RuntimeTweakUI>();
     }
 
     // ─────────────────────────────────────────────────────────────────────────

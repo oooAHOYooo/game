@@ -202,6 +202,7 @@ public class Village : MonoBehaviour
         aura.transform.localPosition = Vector3.zero;
         var ps   = aura.AddComponent<ParticleSystem>();
         var main = ps.main;
+        ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
         main.loop          = true;
         main.duration      = 2f;
         main.startLifetime = 1.5f;
@@ -258,6 +259,7 @@ public class Village : MonoBehaviour
             fireObj.transform.localPosition = Vector3.up * 0.05f;
             var ps   = fireObj.AddComponent<ParticleSystem>();
             var fMain = ps.main;
+            ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
             fMain.loop          = true;
             fMain.duration      = 1f;
             fMain.startLifetime = new ParticleSystem.MinMaxCurve(0.3f, 0.7f);

@@ -14,7 +14,7 @@ public class PlayerHealth : MonoBehaviour
 
     private bool _isInvincible = false;
 
-    void Start() => CurrentHP = MaxHP;
+    void Start() => CurrentHP = GameSettings.PlayerMaxHP;
 
     public void TakeDamage(float amount)
     {

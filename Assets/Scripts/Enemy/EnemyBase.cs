@@ -283,6 +283,7 @@ public class EnemyBase : MonoBehaviour
         aura.transform.localPosition = Vector3.up;
         var ps   = aura.AddComponent<ParticleSystem>();
         var main = ps.main;
+        ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
         main.loop             = true;
         main.duration         = 1f;
         main.startLifetime    = 0.5f;
