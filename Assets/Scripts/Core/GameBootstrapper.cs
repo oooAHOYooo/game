@@ -42,6 +42,9 @@ public class GameBootstrapper : MonoBehaviour
         Application.targetFrameRate = 60;
         QualitySettings.vSyncCount  = 1;
 
+        // Load animations early so they're available for character builds
+        AnimationLibrary.DebugListAnimations();
+
         BuildIsland();
         BuildVillage();
         BuildLighting();
@@ -146,7 +149,13 @@ public class GameBootstrapper : MonoBehaviour
             spawnY = h1.point.y + 0.5f;
 
         // Player 1 – always active (god-sized ninja on the island)
+        // Try animated character first, fall back to primitive if model not found
+        #if UNITY_EDITOR
+        _player1 = TryBuildAnimatedNinja("Player1", new Vector3(-8f, spawnY, 0), PaletteGold, false, 0)
+                ?? BuildNinja("Player1", new Vector3(-8f, spawnY, 0), PaletteGold, false, 0);
+        #else
         _player1 = BuildNinja("Player1", new Vector3(-8f, spawnY, 0), PaletteGold, false, 0);
+        #endif
 
         float spawn2Y = 3f;
         if (Physics.Raycast(new Vector3(8f, 100f, 0), Vector3.down, out RaycastHit h2, 200f))
@@ -154,8 +163,125 @@ public class GameBootstrapper : MonoBehaviour
 
         // Player 2 – ghost if no second controller
         bool hasSecondController = Gamepad.all.Count >= 2;
+        #if UNITY_EDITOR
+        _player2Ghost = TryBuildAnimatedNinja("Player2", new Vector3(8f, spawn2Y, 0), PaletteGhostBlue, !hasSecondController, 1)
+                     ?? BuildNinja("Player2", new Vector3(8f, spawn2Y, 0), PaletteGhostBlue, !hasSecondController, 1);
+        #else
         _player2Ghost = BuildNinja("Player2", new Vector3(8f, spawn2Y, 0), PaletteGhostBlue, !hasSecondController, 1);
+        #endif
     }
+
+    /// <summary>
+    /// Apply branded player materials (Gold for P1, Cyan for P2)
+    /// </summary>
+    void ApplyPlayerBrandMaterial(GameObject characterRoot, int playerIndex)
+    {
+        #if UNITY_EDITOR
+        string materialName = playerIndex == 0 ? "mat_P1_Gold" : "mat_P2_Cyan";
+        var material = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>($"Assets/Art/Materials/{materialName}.mat");
+
+        if (material != null)
+        {
+            // Apply to all mesh renderers
+            var renderers = characterRoot.GetComponentsInChildren<Renderer>();
+            foreach (var renderer in renderers)
+            {
+                renderer.material = material;
+            }
+            Debug.Log($"Applied {materialName} to {characterRoot.name}");
+        }
+        else
+        {
+            Debug.LogWarning($"Material {materialName} not found. Run 'NinjaStrike/Create Player Materials' from menu.");
+        }
+        #endif
+    }
+
+    #if UNITY_EDITOR
+    /// <summary>
+    /// Try to build an animated character using the Mannequin model and loaded animations.
+    /// Returns null if the model can't be loaded (falls back to primitives).
+    /// </summary>
+    GameObject TryBuildAnimatedNinja(string playerName, Vector3 spawnPos, Color bodyColor, bool isGhost, int playerIndex)
+    {
+        // Load the character model FBX
+        var modelPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Art/Models/Character/Mannequin_Base.fbx");
+        if (modelPrefab == null)
+        {
+            Debug.LogWarning($"Mannequin_Base.fbx not found, falling back to primitives for {playerName}");
+            return null;
+        }
+
+        // Instantiate the model
+        var root = Instantiate(modelPrefab, spawnPos, Quaternion.identity);
+        root.name = playerName;
+
+        // Apply branded material based on player
+        ApplyPlayerBrandMaterial(root, playerIndex);
+
+        // Load animations
+        var animSet = AnimationLibrary.LoadAnimations();
+
+        // Add Animator component
+        var animator = root.GetComponent<Animator>();
+        if (animator == null)
+            animator = root.AddComponent<Animator>();
+
+        // Build or load animation controller
+        var controller = AnimatorControllerBuilder.CreateController(animSet, "Assets/Art/Animator/PlayerController.controller");
+        animator.runtimeAnimatorController = controller;
+
+        // Add physics
+        var rb = root.GetComponent<Rigidbody>();
+        if (rb == null) rb = root.AddComponent<Rigidbody>();
+        rb.mass = 70f;
+        rb.linearDamping = 2f;
+        rb.angularDamping = 5f;
+        rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
+
+        var col = root.GetComponent<CapsuleCollider>();
+        if (col == null) col = root.AddComponent<CapsuleCollider>();
+        col.height = 2f;
+        col.radius = 0.4f;
+        col.center = new Vector3(0, 1f, 0);
+
+        // Add NinjaController
+        var ctrl = root.GetComponent<NinjaController>();
+        if (ctrl == null) ctrl = root.AddComponent<NinjaController>();
+        ctrl.PlayerIndex = playerIndex;
+        ctrl.IsGhost = isGhost;
+        ctrl.BodyColor = bodyColor;
+
+        // Add weapon holder
+        var weaponHolder = root.transform.Find("WeaponHolder");
+        if (weaponHolder == null)
+        {
+            weaponHolder = new GameObject("WeaponHolder").transform;
+            weaponHolder.SetParent(root.transform);
+            weaponHolder.localPosition = new Vector3(0.5f, 1.2f, 0);
+        }
+        ctrl.WeaponHolder = weaponHolder;
+
+        // Build initial weapon
+        var sword = BuildWeapon(weaponHolder, false, bodyColor);
+        ctrl.SwordRoot = sword;
+
+        // Add other components
+        root.AddComponent<EnvironmentInteractor>();
+        var health = root.AddComponent<PlayerHealth>();
+        health.PlayerIndex = playerIndex;
+
+        // Add animation driver
+        var animChar = root.AddComponent<AnimatedCharacter>();
+        animChar.Controller = ctrl;
+
+        // Aura VFX
+        BuildAuraVFX(root.transform, bodyColor, isGhost);
+
+        Debug.Log($"[GameBootstrapper] Built animated ninja {playerName} with Mannequin model");
+        return root;
+    }
+    #endif
 
     GameObject BuildNinja(string playerName, Vector3 spawnPos, Color bodyColor, bool isGhost, int playerIndex)
     {

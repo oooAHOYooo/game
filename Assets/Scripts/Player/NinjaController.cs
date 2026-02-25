@@ -51,6 +51,7 @@ public class NinjaController : MonoBehaviour
     [HideInInspector] public float CurrentKi         = 100f;
     [HideInInspector] public float WeaponHoldTimer   = 0f;
     [HideInInspector] public bool  IsGrounded        = false;
+    [HideInInspector] public int   LastAttackType    = 0;  // 1=light punch, 2=heavy punch, 3=light kick, 4=heavy kick
 
     // ── Private ───────────────────────────────────────────────────────────
     private Rigidbody   _rb;
@@ -67,8 +68,10 @@ public class NinjaController : MonoBehaviour
     private float       _verticalInput;
     private bool        _jumpPressed;
     private bool        _dodgePressed;
-    private bool        _lightPressed;
-    private bool        _heavyHeld;
+    private bool        _lightPunchPressed;
+    private bool        _heavyPunchHeld;
+    private bool        _lightKickPressed;
+    private bool        _heavyKickHeld;
     private bool        _kiHeld;
     private bool        _blockHeld;
     private bool        _lockOnPressed;
@@ -149,7 +152,8 @@ public class NinjaController : MonoBehaviour
         // Reset per-frame triggers
         _jumpPressed = false;
         _dodgePressed = false;
-        _lightPressed = false;
+        _lightPunchPressed = false;
+        _lightKickPressed = false;
         _lockOnPressed = false;
 
         if (IsGhost) return;
@@ -158,7 +162,7 @@ public class NinjaController : MonoBehaviour
         Vector2 compositeMove = Vector2.zero;
         Vector2 compositeVertical = Vector2.zero;
 
-        // 1. Keyboard (Player 1 Only)
+        // 1. Keyboard (Player 1 Only) — UFC-style mapping
         if (PlayerIndex == 0 && Keyboard.current != null)
         {
             var k = Keyboard.current;
@@ -173,15 +177,20 @@ public class NinjaController : MonoBehaviour
 
             if (k.spaceKey.wasPressedThisFrame) _jumpPressed = true;
             if (k.leftShiftKey.wasPressedThisFrame) _dodgePressed = true;
-            if (k.jKey.wasPressedThisFrame) _lightPressed = true;
-            _heavyHeld = k.kKey.isPressed;
+
+            // UFC-style attack mapping
+            if (k.jKey.wasPressedThisFrame) _lightPunchPressed = true;      // J = Light Punch
+            _heavyPunchHeld = k.kKey.isPressed;                              // K = Heavy Punch
+            if (k.uKey.wasPressedThisFrame) _lightKickPressed = true;         // U = Light Kick
+            _heavyKickHeld = k.iKey.isPressed;                               // I = Heavy Kick
+
             _kiHeld = k.lKey.isPressed;
-            _blockHeld = k.iKey.isPressed;
-            _weaponTransformHeld = k.uKey.isPressed;
+            _blockHeld = k.oKey.isPressed;
+            _weaponTransformHeld = k.pKey.isPressed;
             if (k.fKey.wasPressedThisFrame) _lockOnPressed = true;
         }
 
-        // 2. Gamepad
+        // 2. Gamepad — UFC-style button layout
         RefreshGamepad();
         if (_pad != null)
         {
@@ -192,14 +201,25 @@ public class NinjaController : MonoBehaviour
             if (ls.sqrMagnitude > 0.1f) compositeMove = ls;
             if (Mathf.Abs(rs.y) > 0.1f) _verticalInput = rs.y;
 
+            // UFC Attack Mapping:
+            // South (A on Xbox / Cross on PS4) = Jump
+            // East (B on Xbox / Circle on PS4) = Dodge
+            // Right Shoulder (RB/R1) = Light Punch
+            // Right Trigger (RT/R2) = Heavy Punch
+            // Left Shoulder (LB/L1) = Light Kick
+            // Left Trigger (LT/L2) = Heavy Kick
+
             if (_pad.buttonSouth.wasPressedThisFrame) _jumpPressed = true;
             if (_pad.buttonEast.wasPressedThisFrame) _dodgePressed = true;
-            if (_pad.rightShoulder.wasPressedThisFrame) _lightPressed = true;
-            if (_pad.rightTrigger.ReadValue() > 0.5f) _heavyHeld = true;
-            if (_pad.leftTrigger.ReadValue() > 0.5f) _kiHeld = true;
-            if (_pad.leftShoulder.isPressed) _blockHeld = true;
-            if (_pad.rightStickButton.wasPressedThisFrame) _lockOnPressed = true;
-            if (_pad.buttonWest.isPressed) _weaponTransformHeld = true;
+            if (_pad.rightShoulder.wasPressedThisFrame) _lightPunchPressed = true;
+            _heavyPunchHeld = _pad.rightTrigger.ReadValue() > 0.5f;
+            if (_pad.leftShoulder.wasPressedThisFrame) _lightKickPressed = true;
+            _heavyKickHeld = _pad.leftTrigger.ReadValue() > 0.5f;
+
+            _kiHeld = _pad.buttonNorth.isPressed;  // Y/Triangle for Ki
+            _blockHeld = _pad.buttonWest.isPressed;  // X/Square for Block
+            _weaponTransformHeld = _pad.rightStickButton.isPressed;  // Right stick click for weapon transform
+            if (_pad.leftStickButton.wasPressedThisFrame) _lockOnPressed = true;  // Left stick click for lock-on
         }
 
         _moveInput = new Vector3(compositeMove.x, 0, compositeMove.y);
@@ -411,14 +431,15 @@ public class NinjaController : MonoBehaviour
     {
         if (_attackCooldown > 0 || IsChargingKi) return;
 
-        // Light attack (RB /R1)
-        if (_lightPressed)
+        // Light Punch (RB/R1)
+        if (_lightPunchPressed)
         {
+            LastAttackType = 1;
             StartCoroutine(PerformLightAttack());
         }
 
-        // Heavy attack (RT/R2 hold)
-        if (_heavyHeld)
+        // Heavy Punch (RT/R2 hold)
+        if (_heavyPunchHeld)
         {
             _heavyChargeTimer += Time.fixedDeltaTime;
             _heavyChargeActive = true;
@@ -426,7 +447,29 @@ public class NinjaController : MonoBehaviour
         else if (_heavyChargeActive)
         {
             _heavyChargeActive = false;
+            LastAttackType = 2;
             StartCoroutine(PerformHeavyAttack(_heavyChargeTimer));
+            _heavyChargeTimer = 0f;
+        }
+
+        // Light Kick (LB/L1)
+        if (_lightKickPressed)
+        {
+            LastAttackType = 3;
+            StartCoroutine(PerformLightKick());
+        }
+
+        // Heavy Kick (LT/L2 hold)
+        if (_heavyKickHeld)
+        {
+            _heavyChargeTimer += Time.fixedDeltaTime;
+            _heavyChargeActive = true;
+        }
+        else if (_heavyChargeActive && _heavyKickHeld == false)
+        {
+            _heavyChargeActive = false;
+            LastAttackType = 4;
+            StartCoroutine(PerformHeavyKick(_heavyChargeTimer));
             _heavyChargeTimer = 0f;
         }
     }
@@ -471,6 +514,43 @@ public class NinjaController : MonoBehaviour
 
         float range = IsStaffMode ? 4f : 2.5f;
         ActivateWeaponHitbox(damage, range, 360f, HEAVY_ATTACK_DURATION);
+
+        yield return new WaitForSeconds(HEAVY_ATTACK_DURATION);
+        IsAttacking = false;
+    }
+
+    IEnumerator PerformLightKick()
+    {
+        IsAttacking = true;
+        _attackCooldown = LIGHT_ATTACK_COOLDOWN;
+
+        // Slight forward momentum on kick
+        _rb.AddForce(transform.forward * 6f, ForceMode.VelocityChange);
+
+        float damage = GameSettings.SwordLightDamage * 0.9f;  // Kicks slightly weaker than punches
+        float range = 2.0f;  // Slightly longer range than punches
+        float angle = 120f;  // Wider kick arc
+
+        ActivateWeaponHitbox(damage, range, angle, LIGHT_ATTACK_DURATION);
+
+        yield return new WaitForSeconds(LIGHT_ATTACK_DURATION);
+        IsAttacking = false;
+    }
+
+    IEnumerator PerformHeavyKick(float chargeTime)
+    {
+        IsAttacking = true;
+        _attackCooldown = HEAVY_ATTACK_COOLDOWN;
+
+        chargeTime = Mathf.Clamp(chargeTime, 0.1f, 1.5f);
+        float damageMultiplier = 1f + chargeTime;
+        float damage = GameSettings.SwordHeavyDamage * 1.1f * damageMultiplier;  // Heavy kicks pack more punch
+
+        // Strong forward thrust on heavy kick
+        _rb.AddForce(transform.forward * 12f, ForceMode.VelocityChange);
+
+        float range = 3f;
+        ActivateWeaponHitbox(damage, range, 180f, HEAVY_ATTACK_DURATION);
 
         yield return new WaitForSeconds(HEAVY_ATTACK_DURATION);
         IsAttacking = false;
@@ -675,8 +755,11 @@ public class NinjaController : MonoBehaviour
         _verticalInput = fly ? 1f : 0f;
     }
 
-    public void AIAttackLight()  => StartCoroutine(PerformLightAttack());
-    public void AIAttackHeavy()  => StartCoroutine(PerformHeavyAttack(0.5f));
+    public void AIAttackLight()      => StartCoroutine(PerformLightAttack());
+    public void AIAttackHeavy()      => StartCoroutine(PerformHeavyAttack(0.5f));
+    public void AIAttackLightKick()  => StartCoroutine(PerformLightKick());
+    public void AIAttackHeavyKick()  => StartCoroutine(PerformHeavyKick(0.5f));
+
     public void AIFireLaser()
     {
         IsChargingKi  = false;

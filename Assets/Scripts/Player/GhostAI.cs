@@ -96,9 +96,12 @@ public class GhostAI : MonoBehaviour
 
             case GhostState.Attacking:
                 MoveToward(_currentTarget.transform.position);
+                // Mix punches and kicks for UFC-style combat variety
                 var rng = Random.value;
-                if (rng < 0.6f) Controller.AIAttackLight();
-                else            Controller.AIAttackHeavy();
+                if (rng < 0.35f)      Controller.AIAttackLight();        // Light punch
+                else if (rng < 0.60f) Controller.AIAttackLightKick();    // Light kick
+                else if (rng < 0.80f) Controller.AIAttackHeavy();        // Heavy punch
+                else                  Controller.AIAttackHeavyKick();    // Heavy kick
                 break;
 
             case GhostState.Supporting:
