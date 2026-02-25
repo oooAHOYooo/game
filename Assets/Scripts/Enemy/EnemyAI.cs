@@ -23,10 +23,12 @@ public class EnemyAI : MonoBehaviour
     // ── State ─────────────────────────────────────────────────────────────
     private EnemyBase   _base;
     private Rigidbody   _rb;
+    private Animator    _anim;
     private Transform   _target;          // nearest player
     private float       _attackTimer;
     private float       _rangedTimer;
     private float       _circleAngle;
+    private float       _speedBlend;
     private bool        _isActing;
     private const float RANGED_COOLDOWN = 3f;
 
@@ -35,6 +37,7 @@ public class EnemyAI : MonoBehaviour
     {
         _base = GetComponent<EnemyBase>();
         _rb   = GetComponent<Rigidbody>();
+        _anim = GetComponent<Animator>();
     }
 
     void Start()
@@ -45,9 +48,10 @@ public class EnemyAI : MonoBehaviour
         // Type-specific stat overrides
         switch (EnemyType)
         {
-            case "ShadowArcher": MoveSpeed = 3f; AttackCooldown = 2.5f; RangedAttackChance = 0.7f; break;
-            case "Berserker":    MoveSpeed = 6f; AttackCooldown = 1.2f; AttackRange = 2.8f;        break;
-            case "MiniBoss":     MoveSpeed = 4f; AttackCooldown = 1.0f; AttackRange = 3.0f;        break;
+            case "Elite": MoveSpeed = 3.5f; AttackCooldown = 2.5f; RangedAttackChance = 0.7f; break;
+            case "Brute": MoveSpeed = 5.5f; AttackCooldown = 1.4f; AttackRange = 2.8f;        break;
+            case "Boss":  MoveSpeed = 4.5f; AttackCooldown = 1.2f; AttackRange = 3.2f;        break;
+            default:      MoveSpeed = 6.0f; AttackCooldown = 1.6f; break; // Grunt
         }
     }
 
@@ -64,6 +68,21 @@ public class EnemyAI : MonoBehaviour
             UpdateActiveEngagement();
         else
             UpdateCircling();
+
+        UpdateAnimator();
+    }
+
+    void UpdateAnimator()
+    {
+        if (_anim == null) return;
+
+        float horizontalSpeed = new Vector3(_rb.linearVelocity.x, 0, _rb.linearVelocity.z).magnitude;
+        float targetSpeed = horizontalSpeed / MoveSpeed;
+        _speedBlend = Mathf.Lerp(_speedBlend, targetSpeed > 0.1f ? targetSpeed : 0f, Time.deltaTime * 5f);
+
+        _anim.SetFloat("Speed", _speedBlend);
+        _anim.SetBool("IsFlying", _base.IsFlying);
+        _anim.SetBool("IsAttacking", _isActing);
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -131,11 +150,11 @@ public class EnemyAI : MonoBehaviour
 
         switch (EnemyType)
         {
-            case "FootSoldier": yield return StartCoroutine(ComboSlash(3)); break;
-            case "ShadowArcher": yield return StartCoroutine(FireArrow());  break;
-            case "Berserker":   yield return StartCoroutine(BerserkerSlam()); break;
-            case "MiniBoss":    yield return StartCoroutine(MiniBossCombo()); break;
-            default:            yield return StartCoroutine(ComboSlash(2)); break;
+            case "Grunt": yield return StartCoroutine(ComboSlash(3)); break;
+            case "Elite": yield return StartCoroutine(FireArrow());  break;
+            case "Brute": yield return StartCoroutine(BerserkerSlam()); break;
+            case "Boss":  yield return StartCoroutine(BossCombo()); break;
+            default:      yield return StartCoroutine(ComboSlash(2)); break;
         }
 
         _isActing = false;
@@ -145,6 +164,9 @@ public class EnemyAI : MonoBehaviour
     {
         for (int i = 0; i < hits; i++)
         {
+            // Animation trigger
+            if (_anim != null) _anim.SetInteger("AttackType", (i % 2 == 0) ? 1 : 3);
+
             // Lunge
             if (_target != null)
             {
@@ -154,12 +176,15 @@ public class EnemyAI : MonoBehaviour
 
             // Hit check sphere
             HitPlayersInRange(AttackRange, GetDamage());
-            yield return new WaitForSeconds(0.25f);
+            yield return new WaitForSeconds(0.45f);
+            if (_anim != null) _anim.SetInteger("AttackType", 0);
         }
     }
 
     IEnumerator BerserkerSlam()
     {
+        if (_anim != null) _anim.SetInteger("AttackType", 2);
+
         // Wind-up: stand still and flash
         float windUp = 0.6f;
         for (float t = 0; t < windUp; t += Time.deltaTime)
@@ -179,21 +204,25 @@ public class EnemyAI : MonoBehaviour
         }
         HitPlayersInRange(4f, GetDamage() * 1.5f);
         SpawnSlamVFX();
-        yield return new WaitForSeconds(0.3f);
+        yield return new WaitForSeconds(0.5f);
+        if (_anim != null) _anim.SetInteger("AttackType", 0);
     }
 
     IEnumerator FireArrow()
     {
         if (_target == null) yield break;
 
+        if (_anim != null) _anim.SetInteger("AttackType", 1);
+
         // Spawn projectile
         Vector3 origin = transform.position + Vector3.up * 1.5f;
         Vector3 dir    = (_target.position + Vector3.up - origin).normalized;
         SpawnProjectile(origin, dir, _base.AccentColor, GetDamage() * 0.7f, 18f);
-        yield return new WaitForSeconds(0.3f);
+        yield return new WaitForSeconds(0.4f);
+        if (_anim != null) _anim.SetInteger("AttackType", 0);
     }
 
-    IEnumerator MiniBossCombo()
+    IEnumerator BossCombo()
     {
         yield return StartCoroutine(ComboSlash(2));
         yield return new WaitForSeconds(0.2f);
@@ -210,11 +239,11 @@ public class EnemyAI : MonoBehaviour
     {
         float baseDmg = EnemyType switch
         {
-            "FootSoldier"  => 12f,
-            "ShadowArcher" => 8f,
-            "Berserker"    => 22f,
-            "MiniBoss"     => 20f,
-            _              => 12f
+            "Grunt" => 12f,
+            "Elite" => 8f,
+            "Brute" => 22f,
+            "Boss"  => 20f,
+            _       => 12f
         };
         return baseDmg * (1f + _base.WaveIndex * 0.1f);
     }

@@ -70,10 +70,10 @@ public class WaveManager : MonoBehaviour
 
             GameObject enemyGO = enemyList[i] switch
             {
-                "ShadowArcher" => EnemyBase.BuildShadowArcher(spawnPos, waveIndex),
-                "Berserker"    => EnemyBase.BuildBerserker(spawnPos, waveIndex),
-                "MiniBoss"     => EnemyBase.BuildMiniBoss(spawnPos, waveIndex),
-                _              => EnemyBase.BuildFootSoldier(spawnPos, waveIndex)
+                "Elite" => EnemyBase.BuildShadowArcher(spawnPos, waveIndex),
+                "Brute" => EnemyBase.BuildBerserker(spawnPos, waveIndex),
+                "Boss"  => EnemyBase.BuildMiniBoss(spawnPos, waveIndex),
+                _       => EnemyBase.BuildFootSoldier(spawnPos, waveIndex)
             };
 
             var eb = enemyGO.GetComponent<EnemyBase>();
@@ -180,31 +180,31 @@ public class WaveManager : MonoBehaviour
 
         if (waveIndex == 0)
         {
-            // Wave 1: all foot soldiers
-            for (int i = 0; i < count; i++) list.Add("FootSoldier");
+            // Wave 1: all grunts
+            for (int i = 0; i < count; i++) list.Add("Grunt");
         }
         else if (waveIndex == 1)
         {
-            // Wave 2: soldiers + 1 archer
-            for (int i = 0; i < count - 1; i++) list.Add("FootSoldier");
-            list.Add("ShadowArcher");
+            // Wave 2: grunts + 1 elite
+            for (int i = 0; i < count - 1; i++) list.Add("Grunt");
+            list.Add("Elite");
         }
         else if (waveIndex == 2)
         {
-            // Wave 3: soldiers + 2 archers + 1 berserker
-            list.Add("Berserker");
-            list.Add("ShadowArcher");
-            list.Add("ShadowArcher");
-            for (int i = 3; i < count; i++) list.Add("FootSoldier");
+            // Wave 3: grunts + 2 elites + 1 brute
+            list.Add("Brute");
+            list.Add("Elite");
+            list.Add("Elite");
+            for (int i = 3; i < count; i++) list.Add("Grunt");
         }
         else
         {
             // Wave 4+: increasing complexity
-            list.Add("MiniBoss");
+            list.Add("Boss");
             int remaining = count - 1;
-            int archers   = remaining / 3;
-            for (int i = 0; i < archers; i++)   list.Add("ShadowArcher");
-            for (int i = archers; i < remaining; i++) list.Add("FootSoldier");
+            int elites    = remaining / 3;
+            for (int i = 0; i < elites; i++)   list.Add("Elite");
+            for (int i = elites; i < remaining; i++) list.Add("Grunt");
         }
 
         // Shuffle

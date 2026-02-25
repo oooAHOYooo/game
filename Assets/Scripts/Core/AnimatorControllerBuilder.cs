@@ -32,7 +32,7 @@ public class AnimatorControllerBuilder
         controller.AddParameter("Speed", AnimatorControllerParameterType.Float);
         controller.AddParameter("IsFlying", AnimatorControllerParameterType.Bool);
         controller.AddParameter("IsAttacking", AnimatorControllerParameterType.Bool);
-        controller.AddParameter("AttackType", AnimatorControllerParameterType.Integer);  // 0=none, 1=light, 2=heavy
+        controller.AddParameter("AttackType", AnimatorControllerParameterType.Int);  // 0=none, 1=light, 2=heavy
         controller.AddParameter("IsChargingKi", AnimatorControllerParameterType.Bool);
 
         // Create states

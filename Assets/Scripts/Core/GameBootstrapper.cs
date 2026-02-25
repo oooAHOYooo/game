@@ -271,10 +271,6 @@ public class GameBootstrapper : MonoBehaviour
         var health = root.AddComponent<PlayerHealth>();
         health.PlayerIndex = playerIndex;
 
-        // Add animation driver
-        var animChar = root.AddComponent<AnimatedCharacter>();
-        animChar.Controller = ctrl;
-
         // Aura VFX
         BuildAuraVFX(root.transform, bodyColor, isGhost);
 

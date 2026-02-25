@@ -141,89 +141,96 @@ public class EnemyBase : MonoBehaviour
     // ─────────────────────────────────────────────────────────────────────
     public static GameObject BuildFootSoldier(Vector3 spawnPos, int waveIndex)
     {
-        return BuildEnemyBase("FootSoldier", spawnPos, 40f,
-            GameBootstrapper.PaletteCrimson, waveIndex, 1f + waveIndex * 0.12f);
+        return BuildEnemyBase("Grunt", spawnPos, 40f,
+            GameBootstrapper.PaletteCrimson, waveIndex, 1.0f);
     }
 
     public static GameObject BuildShadowArcher(Vector3 spawnPos, int waveIndex)
     {
-        return BuildEnemyBase("ShadowArcher", spawnPos, 30f,
-            GameBootstrapper.PalettePurple, waveIndex, 0.9f + waveIndex * 0.1f);
+        return BuildEnemyBase("Elite", spawnPos, 30f,
+            GameBootstrapper.PalettePurple, waveIndex, 0.95f);
     }
 
     public static GameObject BuildBerserker(Vector3 spawnPos, int waveIndex)
     {
-        return BuildEnemyBase("Berserker", spawnPos, 80f,
-            new Color(1f, 0.45f, 0.05f), waveIndex, 1.2f + waveIndex * 0.12f);
+        return BuildEnemyBase("Brute", spawnPos, 100f,
+            GameBootstrapper.PaletteGold, waveIndex, 1.35f);
     }
 
     public static GameObject BuildMiniBoss(Vector3 spawnPos, int waveIndex)
     {
-        return BuildEnemyBase("MiniBoss", spawnPos, 150f,
-            GameBootstrapper.PaletteGold, waveIndex, 1.5f + waveIndex * 0.12f);
+        return BuildEnemyBase("Boss", spawnPos, 200f,
+            new Color(1f, 0.2f, 0f), waveIndex, 1.6f);
     }
 
     static GameObject BuildEnemyBase(string typeName, Vector3 pos, float hp, Color accent, int wave, float scale)
     {
-        var root = new GameObject("Enemy_" + typeName);
+        GameObject root;
+        #if UNITY_EDITOR
+        var modelPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Art/Models/Character/Mannequin_Base.fbx");
+        if (modelPrefab != null)
+        {
+            root = Instantiate(modelPrefab, pos, Quaternion.identity);
+            root.name = "Enemy_" + typeName;
+            root.transform.localScale = Vector3.one * scale;
+
+            // Apply material color
+            var renderers = root.GetComponentsInChildren<Renderer>();
+            foreach (var r in renderers)
+            {
+                var mat = new Material(GameBootstrapper.GetHDRPLitShader());
+                mat.color = new Color(0.05f, 0.05f, 0.08f);
+                GameBootstrapper.SetHDRPEmission(mat, accent, 1.5f);
+                r.material = mat;
+            }
+
+            // Animator setup
+            var anim = root.GetComponent<Animator>();
+            if (anim == null) anim = root.AddComponent<Animator>();
+            var animSet = AnimationLibrary.LoadAnimations();
+            anim.runtimeAnimatorController = AnimatorControllerBuilder.GetOrCreateController(animSet);
+        }
+        else
+        {
+            // Fallback to primitive if model missing
+            root = new GameObject("Enemy_" + typeName);
+            root.transform.position = pos;
+            var body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            body.transform.SetParent(root.transform);
+            body.transform.localPosition = Vector3.up;
+            body.transform.localScale = new Vector3(0.6f, 0.8f, 0.6f) * scale;
+        }
+        #else
+        root = new GameObject("Enemy_" + typeName);
         root.transform.position = pos;
-
-        // Body
-        var body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-        body.name = "Body";
-        body.transform.SetParent(root.transform);
-        body.transform.localPosition = Vector3.up * 1f;
-        body.transform.localScale    = new Vector3(0.6f, 0.8f, 0.6f) * scale;
-
-        var bodyMat = new Material(GameBootstrapper.GetHDRPLitShader());
-        bodyMat.color = new Color(0.05f, 0.05f, 0.08f);
-        GameBootstrapper.SetHDRPEmission(bodyMat, accent, 1.5f);
-        body.GetComponent<Renderer>().material = bodyMat;
-
-        // Head
-        var head = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        head.name = "Head";
-        head.transform.SetParent(root.transform);
-        head.transform.localPosition = Vector3.up * (2f * scale);
-        head.transform.localScale    = Vector3.one * (0.5f * scale);
-        Destroy(head.GetComponent<Collider>());
-        head.GetComponent<Renderer>().material = bodyMat;
-
-        // Glowing eyes
-        CreateEnemyEye(root.transform, accent, new Vector3( 0.1f * scale, 2.05f * scale, 0.2f * scale));
-        CreateEnemyEye(root.transform, accent, new Vector3(-0.1f * scale, 2.05f * scale, 0.2f * scale));
-
-        // Energy arms (emissive lines on arms)
-        CreateEnergyArm(root.transform, accent, new Vector3( 0.5f * scale, 1.2f * scale, 0), scale);
-        CreateEnergyArm(root.transform, accent, new Vector3(-0.5f * scale, 1.2f * scale, 0), scale);
-
-        // Enemy weapon (varies by type)
-        if (typeName == "Berserker" || typeName == "MiniBoss")
-            CreateEnemyWeapon(root.transform, accent, scale, true);
-        else if (typeName != "ShadowArcher")
-            CreateEnemyWeapon(root.transform, accent, scale, false);
+        #endif
 
         // Physics
-        var rb         = root.AddComponent<Rigidbody>();
-        rb.mass        = 60f * scale;
-        rb.linearDamping        = 3f;
+        var rb = root.GetComponent<Rigidbody>();
+        if (rb == null) rb = root.AddComponent<Rigidbody>();
+        rb.mass = 60f * scale;
+        rb.linearDamping = 3f;
         rb.angularDamping = 5f;
+        rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
 
-        var col        = root.AddComponent<CapsuleCollider>();
-        col.height     = 2f * scale;
-        col.radius     = 0.4f * scale;
-        col.center     = Vector3.up;
+        var col = root.GetComponent<CapsuleCollider>();
+        if (col == null) col = root.AddComponent<CapsuleCollider>();
+        col.height = 2f;
+        col.radius = 0.4f;
+        col.center = Vector3.up;
 
         // Components
-        var eb    = root.AddComponent<EnemyBase>();
-        eb.MaxHP       = hp * (1f + wave * 0.2f);
+        var eb = root.GetComponent<EnemyBase>();
+        if (eb == null) eb = root.AddComponent<EnemyBase>();
+        eb.MaxHP = hp * (1f + wave * 0.2f);
         eb.AccentColor = accent;
-        eb.WaveIndex   = wave;
-        eb.CurrentHP   = eb.MaxHP;
+        eb.WaveIndex = wave;
+        eb.CurrentHP = eb.MaxHP;
 
-        var ai = root.AddComponent<EnemyAI>();
+        var ai = root.GetComponent<EnemyAI>();
+        if (ai == null) ai = root.AddComponent<EnemyAI>();
         ai.EnemyType = typeName;
-        ai.Scale     = scale;
+        ai.Scale = scale;
 
         // Aura
         BuildEnemyAura(root.transform, accent);

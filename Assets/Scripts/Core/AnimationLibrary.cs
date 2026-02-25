@@ -37,18 +37,18 @@ public class AnimationLibrary
 
         // Load locomotion animations
         set.Idle = FindBestMatch(LOCOMOTION_FOLDER, new[] { "Idle", "idle" }, exact: true);
-        set.Run = FindBestMatch(LOCOMOTION_FOLDER, new[] { "Run Forward", "run" });
-        set.Sprint = FindBestMatch(LOCOMOTION_FOLDER, new[] { "Sprint", "sprint" });
-        set.Jump = FindBestMatch(LOCOMOTION_FOLDER, new[] { "Jump", "jump" });
-        set.Fall = FindBestMatch(LOCOMOTION_FOLDER, new[] { "Fall", "fall" });
-        set.Land = FindBestMatch(LOCOMOTION_FOLDER, new[] { "Land", "land" });
+        set.Run = FindBestMatch(LOCOMOTION_FOLDER, new[] { "Run Forward", "Standing Run Forward", "run" });
+        set.Sprint = FindBestMatch(LOCOMOTION_FOLDER, new[] { "Sprint Forward", "Standing Sprint Forward", "sprint" });
+        set.Jump = FindBestMatch(LOCOMOTION_FOLDER, new[] { "Standing Jump", "Jump", "jump" });
+        set.Fall = FindBestMatch(LOCOMOTION_FOLDER, new[] { "Fall A Loop", "Fall B Loop", "Fall", "fall" });
+        set.Land = FindBestMatch(LOCOMOTION_FOLDER, new[] { "Fall A Land To Standing Idle 01", "Land", "land" });
 
         // Load combat animations — UFC-style punches and kicks
-        set.LightPunch = FindBestMatch(COMBAT_FOLDER, new[] { "Punching", "Standing Melee Attack" });
-        set.HeavyPunch = FindBestMatch(COMBAT_FOLDER, new[] { "Boxing", "Stabbing" });
-        set.LightKick = FindBestMatch(COMBAT_FOLDER, new[] { "Kick", "kick" });  // Fallback if no specific kick
-        set.HeavyKick = FindBestMatch(COMBAT_FOLDER, new[] { "Standing Melee Attack Horizontal", "Aim Overdraw" });  // Heavy kick fallback
-        set.ChargeAttack = FindBestMatch(COMBAT_FOLDER, new[] { "Aim Overdraw", "Charge" });
+        set.LightPunch = FindBestMatch(COMBAT_FOLDER, new[] { "Punching", "Boxing", "Standing Melee Attack" });
+        set.HeavyPunch = FindBestMatch(COMBAT_FOLDER, new[] { "Stabbing", "Boxing (1)", "Heavy Punch" });
+        set.LightKick = FindBestMatch(COMBAT_FOLDER, new[] { "Standing Melee Attack Horizontal", "Kick", "kick" });
+        set.HeavyKick = FindBestMatch(COMBAT_FOLDER, new[] { "Standing Aim Overdraw", "Heavy Kick" });
+        set.ChargeAttack = FindBestMatch(COMBAT_FOLDER, new[] { "Standing Aim Overdraw", "Charge" });
 
         return set;
     }

@@ -55,9 +55,11 @@ public class NinjaController : MonoBehaviour
 
     // ── Private ───────────────────────────────────────────────────────────
     private Rigidbody   _rb;
+    private Animator    _anim;
     private Gamepad     _pad;
     private float       _dodgeTimer        = 0f;
     private float       _attackCooldown    = 0f;
+    private float       _speedBlend        = 0f;
     private float       _heavyChargeTimer  = 0f;
     private bool        _heavyChargeActive = false;
     private GameObject  _currentWeapon;
@@ -108,6 +110,13 @@ public class NinjaController : MonoBehaviour
         _laser.Controller    = this;
         _laser.BeamColor     = BodyColor;
         _laser.DamagePerTick = LaserDamagePerTick;
+
+        // Initialize Animator
+        _anim = GetComponentInChildren<Animator>();
+        if (_anim == null) _anim = gameObject.AddComponent<Animator>();
+
+        var animSet = AnimationLibrary.LoadAnimations();
+        _anim.runtimeAnimatorController = AnimatorControllerBuilder.GetOrCreateController(animSet);
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -123,6 +132,28 @@ public class NinjaController : MonoBehaviour
         HandleLockOn();
         HandleAttackCooldown();
         HandleWeaponRotation();
+        UpdateAnimator();
+    }
+
+    void UpdateAnimator()
+    {
+        if (_anim == null) return;
+
+        // Speed blending: Smoothed normalized speed (0 to 1)
+        float horizontalSpeed = new Vector3(_rb.linearVelocity.x, 0, _rb.linearVelocity.z).magnitude;
+        float targetSpeedScale = horizontalSpeed / GameSettings.PlayerGroundSpeed;
+        
+        // Sprint logic: shift scale if > 1
+        if (horizontalSpeed > GameSettings.PlayerGroundSpeed + 1f)
+            targetSpeedScale = 1.2f; 
+
+        _speedBlend = Mathf.Lerp(_speedBlend, horizontalSpeed > 0.1f ? targetSpeedScale : 0f, Time.deltaTime * 6f);
+
+        _anim.SetFloat("Speed", _speedBlend);
+        _anim.SetBool("IsFlying", IsFlying);
+        _anim.SetBool("IsAttacking", IsAttacking);
+        _anim.SetInteger("AttackType", IsAttacking ? LastAttackType : 0);
+        _anim.SetBool("IsChargingKi", IsChargingKi);
     }
 
     void ApplySettings()
