@@ -42,8 +42,8 @@ public class StylizedRockBP : BaseBlueprint
                 Random.Range(-10f, 10f)
             );
             
-            // Stylized blue-gray rock
-            var mat = GetStylizedMaterial(new Color(0.3f, 0.35f, 0.45f));
+            // Stylized reddish-gray rock
+            var mat = GetStylizedMaterial(new Color(0.15f, 0.1f, 0.25f)); // Dark purplish-gray
             block.GetComponent<Renderer>().material = mat;
             
             // If it's the first block, keep collider, else destroy it to optimize

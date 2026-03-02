@@ -32,7 +32,7 @@ public class StylizedTreeBP : BaseBlueprint
             part.transform.localScale = new Vector3(0.4f * (1f - t*0.5f), sectionHeight * 0.55f, 0.4f * (1f - t*0.5f));
             part.transform.up = (pos - lastPos).normalized == Vector3.zero ? Vector3.up : (pos - lastPos).normalized;
             
-            var mat = GetStylizedMaterial(new Color(0.25f, 0.15f, 0.10f)); // warm brown
+            var mat = GetStylizedMaterial(new Color(0.05f, 0.15f, 0.2f)); // dark teal
             part.GetComponent<Renderer>().material = mat;
             DestroyImmediate(part.GetComponent<Collider>());
             
@@ -52,8 +52,8 @@ public class StylizedTreeBP : BaseBlueprint
             float scale = 3.5f * (1.2f - t * 0.5f);
             tier.transform.localScale = new Vector3(scale, scale * 0.7f, scale);
             
-            // Vibrant green with slight glow
-            var leafColor = Color.Lerp(new Color(0.1f, 0.5f, 0.1f), new Color(0.3f, 0.8f, 0.2f), i / (float)CanopyTiers);
+            // Vibrant red/orange with slight glow
+            var leafColor = Color.Lerp(new Color(0.8f, 0.2f, 0.6f), new Color(1.0f, 0.4f, 0.8f), i / (float)CanopyTiers);
             var mat = GetStylizedMaterial(leafColor, 0.3f);
             tier.GetComponent<Renderer>().material = mat;
             DestroyImmediate(tier.GetComponent<Collider>());

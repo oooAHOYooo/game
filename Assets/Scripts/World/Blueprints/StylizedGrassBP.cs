@@ -35,7 +35,7 @@ public class StylizedGrassBP : BaseBlueprint
         blade.transform.localScale = new Vector3(0.8f, 1.2f, 1f);
         blade.transform.rotation = Quaternion.Euler(0, rotationOffset + Random.Range(0, 180f), 0);
         
-        var mat = GetStylizedMaterial(new Color(0.2f, 0.7f, 0.1f), 0.5f); // Vibrant glow green
+        var mat = GetStylizedMaterial(new Color(0.1f, 0.8f, 0.9f), 0.5f); // Glowing cyan
         blade.GetComponent<Renderer>().material = mat;
         
         DestroyImmediate(blade.GetComponent<Collider>());

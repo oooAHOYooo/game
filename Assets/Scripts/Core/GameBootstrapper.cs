@@ -81,33 +81,31 @@ public class GameBootstrapper : MonoBehaviour
     // ─────────────────────────────────────────────────────────────────────────
     void BuildLighting()
     {
-        // Ambient — Dreamy, vibrant atmosphere
+        // Ambient — Dusty, red desert atmosphere
         RenderSettings.ambientMode  = AmbientMode.Flat;
-        RenderSettings.ambientLight = new Color(0.2f, 0.25f, 0.4f); // Brighter blue ambient
-        RenderSettings.fogColor     = new Color(0.4f, 0.6f, 0.8f); // Bright blue fog
+        RenderSettings.ambientLight = new Color(0.05f, 0.1f, 0.2f); // Deep blue ambient
+        RenderSettings.fogColor     = new Color(0.05f, 0.15f, 0.25f); // Teal/blue fog
         RenderSettings.fog          = true;
         RenderSettings.fogMode      = FogMode.ExponentialSquared;
-        RenderSettings.fogDensity   = 0.002f;
+        RenderSettings.fogDensity   = 0.003f; // Slightly thicker fog
 
         // Sun — High intensity for "glow" look
         var sunObj = new GameObject("DirectionalLight_Sun");
         var sunLight = sunObj.AddComponent<Light>();
         sunLight.type      = LightType.Directional;
-        sunLight.color     = new Color(1.00f, 0.95f, 0.85f);
+        sunLight.color     = new Color(0.6f, 0.8f, 1.0f); // Cool cyan sun
         sunLight.intensity = 100000f; // Significantly higher for HDRP bloom targets
         sunObj.transform.rotation = Quaternion.Euler(35f, -40f, 0);
         var hdSun = sunObj.AddComponent<HDAdditionalLightData>();
-        hdSun.intensity = 100000f;
 
-        // Fill Light - Vibrant Cyan/Blue
+        // Fill Light - Warm orange bounce
         var fillObj = new GameObject("DirectionalLight_Fill");
         var fillLight = fillObj.AddComponent<Light>();
         fillLight.type      = LightType.Directional;
-        fillLight.color     = new Color(0.2f, 0.8f, 1.0f);
+        fillLight.color     = new Color(0.8f, 0.2f, 0.6f); // Magenta fill
         fillLight.intensity = 20000f;
         fillObj.transform.rotation = Quaternion.Euler(60f, 150f, 0);
         var hdFill = fillObj.AddComponent<HDAdditionalLightData>();
-        hdFill.intensity = 20000f;
 
         // Procedural Post-Processing (Bloom & Color)
         var volObj = new GameObject("GlobalVolume");
@@ -306,7 +304,7 @@ public class GameBootstrapper : MonoBehaviour
         head.transform.SetParent(root.transform);
         head.transform.localPosition = new Vector3(0, 2.05f, 0);
         head.transform.localScale    = new Vector3(0.55f, 0.55f, 0.55f);
-        Destroy(head.GetComponent<Collider>());
+        if (Application.isPlaying) Destroy(head.GetComponent<Collider>()); else DestroyImmediate(head.GetComponent<Collider>());
         head.GetComponent<Renderer>().material = bodyMat;
 
         // ── Eyes (glowing spheres) ──
@@ -319,7 +317,7 @@ public class GameBootstrapper : MonoBehaviour
         band.transform.SetParent(root.transform);
         band.transform.localPosition = new Vector3(0, 2.05f, 0.19f);
         band.transform.localScale    = new Vector3(0.56f, 0.08f, 0.22f);
-        Destroy(band.GetComponent<Collider>());
+        if (Application.isPlaying) Destroy(band.GetComponent<Collider>()); else DestroyImmediate(band.GetComponent<Collider>());
         var bandMat = new Material(GetHDRPLitShader());
         bandMat.color = PaletteCrimson;
         SetHDRPEmission(bandMat, PaletteCrimson, 4f);
@@ -331,7 +329,7 @@ public class GameBootstrapper : MonoBehaviour
         scarf.transform.SetParent(root.transform);
         scarf.transform.localPosition = new Vector3(0, 1.6f, -0.25f);
         scarf.transform.localScale    = new Vector3(0.4f, 0.5f, 0.08f);
-        Destroy(scarf.GetComponent<Collider>());
+        if (Application.isPlaying) Destroy(scarf.GetComponent<Collider>()); else DestroyImmediate(scarf.GetComponent<Collider>());
         var scarfMat = new Material(GetHDRPLitShader());
         scarfMat.color = bodyColor;
         SetHDRPEmission(scarfMat, bodyColor, 2f);
@@ -390,7 +388,7 @@ public class GameBootstrapper : MonoBehaviour
         eye.transform.SetParent(parent);
         eye.transform.localPosition = localPos;
         eye.transform.localScale    = new Vector3(0.07f, 0.07f, 0.07f);
-        Destroy(eye.GetComponent<Collider>());
+        if (Application.isPlaying) Destroy(eye.GetComponent<Collider>()); else DestroyImmediate(eye.GetComponent<Collider>());
         var mat = new Material(GetHDRPLitShader());
         mat.color = Color.white;
         SetHDRPEmission(mat, color, 12f);
@@ -404,7 +402,7 @@ public class GameBootstrapper : MonoBehaviour
         limb.transform.SetParent(parent);
         limb.transform.localPosition = localPos;
         limb.transform.localScale    = scale;
-        Destroy(limb.GetComponent<Collider>());
+        if (Application.isPlaying) Destroy(limb.GetComponent<Collider>()); else DestroyImmediate(limb.GetComponent<Collider>());
         limb.GetComponent<Renderer>().material = mat;
     }
 
@@ -422,7 +420,7 @@ public class GameBootstrapper : MonoBehaviour
             pole.transform.SetParent(root.transform);
             pole.transform.localPosition = new Vector3(0, 0.6f, 0);
             pole.transform.localScale    = new Vector3(0.06f, 0.75f, 0.06f);
-            Destroy(pole.GetComponent<Collider>());
+            if (Application.isPlaying) Destroy(pole.GetComponent<Collider>()); else DestroyImmediate(pole.GetComponent<Collider>());
             var mat = new Material(GetHDRPLitShader());
             mat.color = new Color(0.3f, 0.15f, 0.05f);
             SetHDRPEmission(mat, playerColor, 3f);
@@ -440,7 +438,7 @@ public class GameBootstrapper : MonoBehaviour
             blade.transform.SetParent(root.transform);
             blade.transform.localPosition = new Vector3(0, 0.55f, 0);
             blade.transform.localScale    = new Vector3(0.05f, 0.7f, 0.008f);
-            Destroy(blade.GetComponent<Collider>());
+            if (Application.isPlaying) Destroy(blade.GetComponent<Collider>()); else DestroyImmediate(blade.GetComponent<Collider>());
             var bladeMat = new Material(GetHDRPLitShader());
             bladeMat.color = new Color(0.85f, 0.92f, 1.00f);
             SetHDRPEmission(bladeMat, playerColor, 6f);
@@ -452,7 +450,7 @@ public class GameBootstrapper : MonoBehaviour
             guard.transform.SetParent(root.transform);
             guard.transform.localPosition = new Vector3(0, 0.08f, 0);
             guard.transform.localScale    = new Vector3(0.22f, 0.04f, 0.04f);
-            Destroy(guard.GetComponent<Collider>());
+            if (Application.isPlaying) Destroy(guard.GetComponent<Collider>()); else DestroyImmediate(guard.GetComponent<Collider>());
             var guardMat = new Material(GetHDRPLitShader());
             guardMat.color = PaletteGold;
             SetHDRPEmission(guardMat, PaletteGold, 4f);
@@ -464,7 +462,7 @@ public class GameBootstrapper : MonoBehaviour
             handle.transform.SetParent(root.transform);
             handle.transform.localPosition = new Vector3(0, -0.12f, 0);
             handle.transform.localScale    = new Vector3(0.04f, 0.12f, 0.04f);
-            Destroy(handle.GetComponent<Collider>());
+            if (Application.isPlaying) Destroy(handle.GetComponent<Collider>()); else DestroyImmediate(handle.GetComponent<Collider>());
             var hMat = new Material(GetHDRPLitShader());
             hMat.color = new Color(0.15f, 0.08f, 0.02f);
             handle.GetComponent<Renderer>().material = hMat;
@@ -489,7 +487,7 @@ public class GameBootstrapper : MonoBehaviour
         orb.transform.SetParent(parent);
         orb.transform.localPosition = localPos;
         orb.transform.localScale    = new Vector3(0.12f, 0.12f, 0.12f);
-        Destroy(orb.GetComponent<Collider>());
+        if (Application.isPlaying) Destroy(orb.GetComponent<Collider>()); else DestroyImmediate(orb.GetComponent<Collider>());
         var mat = new Material(GetHDRPLitShader());
         mat.color = color;
         SetHDRPEmission(mat, color, 15f);

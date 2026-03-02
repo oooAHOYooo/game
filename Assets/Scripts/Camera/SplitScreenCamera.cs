@@ -5,12 +5,14 @@ using UnityEngine;
 /// Zoom adapts dynamically to the player's movement speed.
 /// Screen shake is triggered via the static ShakeCamera() method.
 /// </summary>
+[ExecuteAlways]
 public class SplitScreenCamera : MonoBehaviour
 {
     // ── Configuration ─────────────────────────────────────────────────────
     [Header("Follow")]
     public Transform TargetTransform;
-    public Vector3   Offset        = new Vector3(0f, 4.5f, -8.5f);
+    public Vector3   Offset        = new Vector3(0f, 1.8f, -3.5f); // Very zoomed in, over the shoulder
+    public Vector3   LookAtOffset  = new Vector3(1.2f, 1.4f, 0f);  // Look at character's upper body / head
     public float     SmoothTime    = 0.18f;
 
     [Header("Zoom")]
@@ -60,16 +62,19 @@ public class SplitScreenCamera : MonoBehaviour
     {
         Vector3 desiredPos = TargetTransform.position + Offset;
 
-        // Slight lean forward in direction of movement
-        var rb = TargetTransform.GetComponent<Rigidbody>();
-        if (rb != null)
+        // Slight lean forward in direction of movement (only in Play Mode)
+        if (Application.isPlaying)
         {
-            Vector3 horiz = new Vector3(rb.linearVelocity.x, 0, rb.linearVelocity.z);
-            desiredPos += horiz * 0.4f;
+            var rb = TargetTransform.GetComponent<Rigidbody>();
+            if (rb != null)
+            {
+                Vector3 horiz = new Vector3(rb.linearVelocity.x, 0, rb.linearVelocity.z);
+                desiredPos += horiz * 0.4f;
+            }
         }
 
         transform.position = Vector3.SmoothDamp(transform.position, desiredPos, ref _velocity, SmoothTime);
-        transform.LookAt(TargetTransform.position + Vector3.up * 1.2f);
+        transform.LookAt(TargetTransform.position + LookAtOffset);
     }
 
     // ─────────────────────────────────────────────────────────────────────

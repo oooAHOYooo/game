@@ -14,13 +14,13 @@ public class IslandGenerator : MonoBehaviour
     public const int   TerrainRes       = 128;     // mesh resolution
 
     // ── Palette ───────────────────────────────────────────────────────────
-    private static readonly Color GrassGreen   = new Color(0.15f, 0.38f, 0.12f);
-    private static readonly Color GrassDark    = new Color(0.08f, 0.22f, 0.06f);
-    private static readonly Color SandColor    = new Color(0.76f, 0.68f, 0.45f);
-    private static readonly Color RockGray     = new Color(0.30f, 0.28f, 0.26f);
-    private static readonly Color OceanDeep    = new Color(0.02f, 0.10f, 0.25f);
-    private static readonly Color OceanSurf    = new Color(0.05f, 0.30f, 0.55f);
-    private static readonly Color OceanFoam    = new Color(0.70f, 0.85f, 0.90f);
+    private static readonly Color GrassGreen   = new Color(0.1f, 0.05f, 0.2f);
+    private static readonly Color GrassDark    = new Color(0.05f, 0.05f, 0.15f);
+    private static readonly Color SandColor    = new Color(0.2f, 0.1f, 0.3f);
+    private static readonly Color RockGray     = new Color(0.1f, 0.25f, 0.25f);
+    private static readonly Color OceanDeep    = new Color(0.05f, 0.3f, 0.5f);
+    private static readonly Color OceanSurf    = new Color(0.1f, 0.6f, 0.8f);
+    private static readonly Color OceanFoam    = new Color(0.4f, 0.9f, 1.0f);
 
     public Transform IslandRoot { get; private set; }
 
