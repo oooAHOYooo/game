@@ -27,6 +27,7 @@ build_timestamp.txt
 NinjaStrike.x86_64
 
 # ── OS / IDE noise ───────────────────────────────────────────
+.claude/
 .vs/
 .gradle/
 .consulo/
