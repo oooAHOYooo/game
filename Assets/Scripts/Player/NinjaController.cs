@@ -78,6 +78,8 @@ public class NinjaController : MonoBehaviour
     private bool        _blockHeld;
     private bool        _lockOnPressed;
     private bool        _weaponTransformHeld;
+    private bool        _gravityPullHeld;
+    private bool        _gravityPushPressed;
 
     // ── Attack arc sweep timings ──────────────────────────────────────────
     private const float LIGHT_ATTACK_DURATION  = 0.30f;
@@ -131,6 +133,7 @@ public class NinjaController : MonoBehaviour
         HandleKi();
         HandleLockOn();
         HandleAttackCooldown();
+        HandleGravityPowers();
         HandleWeaponRotation();
         UpdateAnimator();
     }
@@ -186,6 +189,7 @@ public class NinjaController : MonoBehaviour
         _lightPunchPressed = false;
         _lightKickPressed = false;
         _lockOnPressed = false;
+        _gravityPushPressed = false;
 
         if (IsGhost) return;
 
@@ -232,25 +236,51 @@ public class NinjaController : MonoBehaviour
             if (ls.sqrMagnitude > 0.1f) compositeMove = ls;
             if (Mathf.Abs(rs.y) > 0.1f) _verticalInput = rs.y;
 
-            // UFC Attack Mapping:
-            // South (A on Xbox / Cross on PS4) = Jump
-            // East (B on Xbox / Circle on PS4) = Dodge
-            // Right Shoulder (RB/R1) = Light Punch
-            // Right Trigger (RT/R2) = Heavy Punch
-            // Left Shoulder (LB/L1) = Light Kick
-            // Left Trigger (LT/L2) = Heavy Kick
+            // Requested Mapping:
+            // South (A/Cross) = Jump
+            // West (X/Square) = Light Punch
+            // North (Y/Triangle) = Light Kick
+            // East (B/Circle) = Ki/Kai (Charge)
+            // RB (R1) = Modifier (for heavy variants)
+            // LT (L2) = Gravity Pull
+            // RT (R2) = Gravity Push
+            // D-Pad Up = Fly Up
+            // D-Pad Down = Fly Down
 
             if (_pad.buttonSouth.wasPressedThisFrame) _jumpPressed = true;
-            if (_pad.buttonEast.wasPressedThisFrame) _dodgePressed = true;
-            if (_pad.rightShoulder.wasPressedThisFrame) _lightPunchPressed = true;
-            _heavyPunchHeld = _pad.rightTrigger.ReadValue() > 0.5f;
-            if (_pad.leftShoulder.wasPressedThisFrame) _lightKickPressed = true;
-            _heavyKickHeld = _pad.leftTrigger.ReadValue() > 0.5f;
+            
+            // Branch mapping based on RB modifier
+            bool rbModifier = _pad.rightShoulder.isPressed;
 
-            _kiHeld = _pad.buttonNorth.isPressed;  // Y/Triangle for Ki
-            _blockHeld = _pad.buttonWest.isPressed;  // X/Square for Block
-            _weaponTransformHeld = _pad.rightStickButton.isPressed;  // Right stick click for weapon transform
-            if (_pad.leftStickButton.wasPressedThisFrame) _lockOnPressed = true;  // Left stick click for lock-on
+            if (rbModifier)
+            {
+                // Heavy variants with RB held
+                if (_pad.buttonWest.wasPressedThisFrame) _lightPunchPressed = true; // Use light punch as base
+                _heavyPunchHeld = _pad.buttonWest.isPressed; 
+                
+                if (_pad.buttonNorth.wasPressedThisFrame) _lightKickPressed = true;
+                _heavyKickHeld = _pad.buttonNorth.isPressed;
+
+                _kiHeld = _pad.buttonEast.isPressed; // Laser instead of just charging?
+            }
+            else
+            {
+                // Light variants
+                if (_pad.buttonWest.wasPressedThisFrame) _lightPunchPressed = true;
+                if (_pad.buttonNorth.wasPressedThisFrame) _lightKickPressed = true;
+                _kiHeld = _pad.buttonEast.isPressed;
+            }
+
+            _gravityPullHeld = _pad.leftTrigger.ReadValue() > 0.5f;
+            if (_pad.rightTrigger.wasPressedThisFrame) _gravityPushPressed = true;
+
+            // D-Pad mapping for flight
+            if (_pad.dpad.up.isPressed) _verticalInput = 1f;
+            else if (_pad.dpad.down.isPressed) _verticalInput = -1f;
+
+            _blockHeld = _pad.leftShoulder.isPressed; 
+            _weaponTransformHeld = _pad.rightStickButton.isPressed;
+            if (_pad.leftStickButton.wasPressedThisFrame) _lockOnPressed = true;
         }
 
         _moveInput = new Vector3(compositeMove.x, 0, compositeMove.y);
@@ -377,6 +407,9 @@ public class NinjaController : MonoBehaviour
         // Physics Blast
         float force = GameSettings.StompForce * (intensity * 0.5f);
         float radius = GameSettings.StompRadius;
+
+        if (VillageFireSystem.Instance != null)
+            VillageFireSystem.Instance.ExtinguishFires(transform.position, radius);
 
         Collider[] hits = Physics.OverlapSphere(transform.position, radius);
         foreach (var h in hits)
@@ -619,10 +652,87 @@ public class NinjaController : MonoBehaviour
                 StartCoroutine(ResetLaser());
             }
             // Regen
-            CurrentKi = Mathf.Min(GameSettings.PlayerMaxKi, CurrentKi + GameSettings.KiRechargeRate * Time.deltaTime);
+            float comboMulti = ComboSystem.Instance != null ? ComboSystem.Instance.GetMultiplier(PlayerIndex) : 1f;
+            CurrentKi = Mathf.Min(GameSettings.PlayerMaxKi, CurrentKi + GameSettings.KiRechargeRate * comboMulti * Time.deltaTime);
         }
 
         IsBlocking = _blockHeld;
+    }
+
+    void HandleGravityPowers()
+    {
+        if (_gravityPullHeld)
+        {
+            ApplyGravityPull();
+        }
+        
+        if (_gravityPushPressed)
+        {
+            ApplyGravityPush();
+        }
+    }
+
+    void ApplyGravityPull()
+    {
+        float radius = 15f * GameSettings.NinjaScale;
+        float pullForce = 25f;
+        Collider[] hits = Physics.OverlapSphere(transform.position, radius);
+        
+        foreach (var h in hits)
+        {
+            var rb = h.GetComponent<Rigidbody>();
+            if (rb != null && rb != _rb)
+            {
+                Vector3 dir = (transform.position - h.transform.position).normalized;
+                rb.AddForce(dir * pullForce, ForceMode.Acceleration);
+            }
+        }
+        
+        // Visual feedback
+        if (Random.value < 0.1f) SpawnGravityVFX(transform.position, Color.cyan);
+    }
+
+    void ApplyGravityPush()
+    {
+        float radius = 12f * GameSettings.NinjaScale;
+        float pushForce = 40f;
+        Collider[] hits = Physics.OverlapSphere(transform.position, radius);
+        
+        SplitScreenCamera.ShakeCamera(PlayerIndex, 0.3f, 0.4f);
+        SpawnGravityVFX(transform.position, Color.magenta);
+
+        foreach (var h in hits)
+        {
+            var rb = h.GetComponent<Rigidbody>();
+            if (rb != null && rb != _rb)
+            {
+                Vector3 dir = (h.transform.position - transform.position).normalized;
+                dir.y += 0.3f; // lift slightly
+                rb.AddForce(dir * pushForce, ForceMode.Impulse);
+            }
+            
+            var eb = h.GetComponentInParent<EnemyBase>();
+            if (eb != null) eb.TakeDamage(15f, transform);
+        }
+    }
+
+    void SpawnGravityVFX(Vector3 pos, Color color)
+    {
+        var obj = new GameObject("GravityVFX");
+        obj.transform.position = pos;
+        var ps = obj.AddComponent<ParticleSystem>();
+        var main = ps.main;
+        main.startLifetime = 0.5f;
+        main.startSpeed = 10f;
+        main.startSize = 0.3f;
+        main.startColor = color;
+        main.loop = false;
+        
+        var em = ps.emission;
+        em.SetBursts(new[] { new ParticleSystem.Burst(0f, 30) });
+        
+        ps.Play();
+        Destroy(obj, 1f);
     }
 
     IEnumerator ResetLaser()

@@ -2,9 +2,10 @@ using UnityEngine;
 using System.Collections;
 
 /// <summary>
-/// EnemyAI — Zelda-style queued engagement.
+/// EnemyAI — Zelda-style queued engagement with player-mimic attacks.
 /// When IsActiveEnemy = false → circle the player, occasionally throw ranged attacks.
-/// When IsActiveEnemy = true  → step forward, engage with type-specific combo.
+/// When IsActiveEnemy = true  → step forward, engage with combos that mirror the player's moveset.
+/// Arsonist type → ignores player, walks to village, sets fires.
 /// </summary>
 [RequireComponent(typeof(EnemyBase))]
 public class EnemyAI : MonoBehaviour
@@ -32,6 +33,17 @@ public class EnemyAI : MonoBehaviour
     private bool        _isActing;
     private const float RANGED_COOLDOWN = 3f;
 
+    // ── Arsonist state ────────────────────────────────────────────────────
+    private Village     _village;
+    private bool        _isBurning = false;
+    private float       _burnTimer = 0f;
+    private const float BURN_TICK_INTERVAL = 0.8f;
+    private const float ARSONIST_VILLAGE_RANGE = 8f;
+    private GameObject  _fireVFX;
+
+    // ── Mimic state ───────────────────────────────────────────────────────
+    private int _mimicComboIndex = 0;
+
     // ─────────────────────────────────────────────────────────────────────
     void Awake()
     {
@@ -48,16 +60,30 @@ public class EnemyAI : MonoBehaviour
         // Type-specific stat overrides
         switch (EnemyType)
         {
-            case "Elite": MoveSpeed = 3.5f; AttackCooldown = 2.5f; RangedAttackChance = 0.7f; break;
-            case "Brute": MoveSpeed = 5.5f; AttackCooldown = 1.4f; AttackRange = 2.8f;        break;
-            case "Boss":  MoveSpeed = 4.5f; AttackCooldown = 1.2f; AttackRange = 3.2f;        break;
-            default:      MoveSpeed = 6.0f; AttackCooldown = 1.6f; break; // Grunt
+            case "Elite":    MoveSpeed = 3.5f; AttackCooldown = 2.5f; RangedAttackChance = 0.7f; break;
+            case "Brute":    MoveSpeed = 5.5f; AttackCooldown = 1.4f; AttackRange = 2.8f;        break;
+            case "Boss":     MoveSpeed = 4.5f; AttackCooldown = 1.2f; AttackRange = 3.2f;        break;
+            case "Arsonist": MoveSpeed = 7.0f; AttackCooldown = 999f; break; // doesn't attack players
+            default:         MoveSpeed = 6.0f; AttackCooldown = 1.6f; break; // Grunt
         }
+
+        // Cache village for arsonists
+        if (EnemyType == "Arsonist")
+            _village = FindAnyObjectByType<Village>();
     }
 
     void Update()
     {
         if (!_base.IsAlive) return;
+
+        // Arsonists have their own behaviour
+        if (EnemyType == "Arsonist")
+        {
+            UpdateArsonist();
+            UpdateAnimator();
+            return;
+        }
+
         FindTarget();
         if (_target == null) return;
 
@@ -83,6 +109,125 @@ public class EnemyAI : MonoBehaviour
         _anim.SetFloat("Speed", _speedBlend);
         _anim.SetBool("IsFlying", _base.IsFlying);
         _anim.SetBool("IsAttacking", _isActing);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // ARSONIST BEHAVIOUR
+    // ─────────────────────────────────────────────────────────────────────
+    void UpdateArsonist()
+    {
+        if (_village == null || _village.IsDestroyed)
+        {
+            // Village gone — rage at player instead
+            FindTarget();
+            if (_target != null)
+            {
+                FaceTarget();
+                MoveTo(_target.position, MoveSpeed);
+                _attackTimer -= Time.deltaTime;
+                if (_attackTimer <= 0f && Vector3.Distance(transform.position, _target.position) < AttackRange)
+                {
+                    _attackTimer = 2f;
+                    StartCoroutine(MimicCombo(2));
+                }
+            }
+            return;
+        }
+
+        float distToVillage = Vector3.Distance(transform.position, _village.Centre);
+
+        if (distToVillage > ARSONIST_VILLAGE_RANGE)
+        {
+            // Sprint to village
+            Vector3 dir = (_village.Centre - transform.position);
+            dir.y = 0;
+            if (dir.sqrMagnitude > 0.01f)
+                transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(dir.normalized), 6f * Time.deltaTime);
+
+            MoveTo(_village.Centre, MoveSpeed);
+            _isBurning = false;
+            DestroyFireVFX();
+        }
+        else
+        {
+            // In range: set fires!
+            if (!_isBurning)
+            {
+                _isBurning = true;
+                SpawnFireVFX();
+            }
+
+            _burnTimer -= Time.deltaTime;
+        if (_burnTimer <= 0f)
+        {
+            _burnTimer = BURN_TICK_INTERVAL;
+            if (VillageFireSystem.Instance != null) VillageFireSystem.Instance.IgniteNearestHut(transform.position);
+        }    }
+
+            // Slowly wander around the village
+            _circleAngle += 20f * Time.deltaTime;
+            float rad = ARSONIST_VILLAGE_RANGE * 0.6f;
+            Vector3 wanderPos = _village.Centre +
+                new Vector3(Mathf.Cos(_circleAngle * Mathf.Deg2Rad) * rad, 0,
+                            Mathf.Sin(_circleAngle * Mathf.Deg2Rad) * rad);
+            MoveTo(wanderPos, MoveSpeed * 0.4f);
+
+            Vector3 faceDir = (_village.Centre - transform.position);
+            faceDir.y = 0;
+            if (faceDir.sqrMagnitude > 0.01f)
+                transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(faceDir.normalized), 4f * Time.deltaTime);
+        }
+    }
+
+    void SpawnFireVFX()
+    {
+        if (_fireVFX != null) return;
+
+        _fireVFX = new GameObject("ArsonistFire");
+        _fireVFX.transform.SetParent(transform);
+        _fireVFX.transform.localPosition = Vector3.forward * 1.5f + Vector3.up * 0.3f;
+
+        var ps   = _fireVFX.AddComponent<ParticleSystem>();
+        var main = ps.main;
+        ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+        main.loop          = true;
+        main.duration      = 1f;
+        main.startLifetime = new ParticleSystem.MinMaxCurve(0.3f, 0.8f);
+        main.startSpeed    = new ParticleSystem.MinMaxCurve(1f, 3f);
+        main.startSize     = new ParticleSystem.MinMaxCurve(0.15f, 0.4f);
+        main.startColor    = new ParticleSystem.MinMaxGradient(
+            new Color(1f, 0.4f, 0.05f), new Color(1f, 0.85f, 0.2f));
+        main.gravityModifier = -0.5f;
+        main.maxParticles    = 40;
+
+        var em = ps.emission;
+        em.rateOverTime = 30f;
+
+        var shape = ps.shape;
+        shape.shapeType = ParticleSystemShapeType.Cone;
+        shape.angle     = 25f;
+        shape.radius    = 0.15f;
+
+        ps.Play();
+
+        // Fire light
+        var lightObj = new GameObject("FireLight");
+        lightObj.transform.SetParent(_fireVFX.transform);
+        lightObj.transform.localPosition = Vector3.zero;
+        var fl = lightObj.AddComponent<Light>();
+        fl.type      = LightType.Point;
+        fl.color     = new Color(1f, 0.5f, 0.1f);
+        fl.intensity = 400f;
+        fl.range     = 4f;
+    }
+
+    void DestroyFireVFX()
+    {
+        if (_fireVFX != null)
+        {
+            Destroy(_fireVFX);
+            _fireVFX = null;
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -113,7 +258,7 @@ public class EnemyAI : MonoBehaviour
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    // ACTIVE ENGAGEMENT (Zelda-style duel)
+    // ACTIVE ENGAGEMENT (Zelda-style duel, now with mimic combos)
     // ─────────────────────────────────────────────────────────────────────
     void UpdateActiveEngagement()
     {
@@ -142,7 +287,7 @@ public class EnemyAI : MonoBehaviour
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    // ATTACK PATTERNS
+    // ATTACK PATTERNS — now includes player-mimic combos
     // ─────────────────────────────────────────────────────────────────────
     IEnumerator PerformAttack()
     {
@@ -150,53 +295,98 @@ public class EnemyAI : MonoBehaviour
 
         switch (EnemyType)
         {
-            case "Grunt": yield return StartCoroutine(ComboSlash(3)); break;
-            case "Elite": yield return StartCoroutine(FireArrow());  break;
-            case "Brute": yield return StartCoroutine(BerserkerSlam()); break;
-            case "Boss":  yield return StartCoroutine(BossCombo()); break;
-            default:      yield return StartCoroutine(ComboSlash(2)); break;
+            case "Grunt":  yield return StartCoroutine(MimicCombo(3));     break;
+            case "Elite":  yield return StartCoroutine(MimicRanged());     break;
+            case "Brute":  yield return StartCoroutine(MimicHeavySlam()); break;
+            case "Boss":   yield return StartCoroutine(BossCombo());       break;
+            default:       yield return StartCoroutine(MimicCombo(2));     break;
         }
 
         _isActing = false;
     }
 
-    IEnumerator ComboSlash(int hits)
+    /// <summary>
+    /// Mimic Combo — enemies perform the same punches and kicks as the player.
+    /// Cycles through Light Punch (1), Heavy Punch (2), Light Kick (3), Heavy Kick (4).
+    /// </summary>
+    IEnumerator MimicCombo(int hits)
     {
         for (int i = 0; i < hits; i++)
         {
-            // Animation trigger
-            if (_anim != null) _anim.SetInteger("AttackType", (i % 2 == 0) ? 1 : 3);
+            _mimicComboIndex = (_mimicComboIndex % 4) + 1; // cycle 1-4
+            if (_anim != null) _anim.SetInteger("AttackType", _mimicComboIndex);
 
-            // Lunge
+            // Lunge forward like the player does
             if (_target != null)
             {
                 Vector3 dir = (_target.position - transform.position).normalized;
-                _rb.AddForce(dir * 6f, ForceMode.VelocityChange);
+                float lungeForce = (_mimicComboIndex <= 2) ? 6f : 8f; // kicks lunge harder
+                _rb.AddForce(dir * lungeForce, ForceMode.VelocityChange);
             }
 
-            // Hit check sphere
-            HitPlayersInRange(AttackRange, GetDamage());
-            yield return new WaitForSeconds(0.45f);
+            float damage = GetMimicDamage(_mimicComboIndex);
+            float range  = (_mimicComboIndex >= 3) ? AttackRange * 1.1f : AttackRange; // kicks have slightly more range
+            HitPlayersInRange(range, damage);
+
+            float duration = (_mimicComboIndex % 2 == 0) ? 0.55f : 0.30f; // heavy = slower
+            yield return new WaitForSeconds(duration);
             if (_anim != null) _anim.SetInteger("AttackType", 0);
         }
     }
 
-    IEnumerator BerserkerSlam()
+    /// <summary>
+    /// Mimic the player's ranged ki ability — fires a projectile mimicking a laser burst.
+    /// </summary>
+    IEnumerator MimicRanged()
+    {
+        if (_target == null) yield break;
+
+        if (_anim != null) _anim.SetInteger("AttackType", 1);
+
+        // Warn with glow
+        foreach (var r in GetComponentsInChildren<Renderer>())
+            GameBootstrapper.SetHDRPEmission(r.material, _base.AccentColor, 8f);
+
+        yield return new WaitForSeconds(0.3f);
+
+        // Fire projectile
+        Vector3 origin = transform.position + Vector3.up * 1.5f;
+        Vector3 dir    = (_target.position + Vector3.up - origin).normalized;
+        SpawnProjectile(origin, dir, _base.AccentColor, GetDamage() * 0.7f, 18f);
+
+        // Second projectile (mimic double-tap)
+        yield return new WaitForSeconds(0.25f);
+        if (_target != null)
+        {
+            dir = (_target.position + Vector3.up - origin).normalized;
+            SpawnProjectile(origin, dir, _base.AccentColor, GetDamage() * 0.5f, 22f);
+        }
+
+        yield return new WaitForSeconds(0.4f);
+        if (_anim != null) _anim.SetInteger("AttackType", 0);
+
+        foreach (var r in GetComponentsInChildren<Renderer>())
+            GameBootstrapper.SetHDRPEmission(r.material, _base.AccentColor, 1.5f);
+    }
+
+    /// <summary>
+    /// Mimic the player's heavy attack — a ground slam with AoE.
+    /// </summary>
+    IEnumerator MimicHeavySlam()
     {
         if (_anim != null) _anim.SetInteger("AttackType", 2);
 
-        // Wind-up: stand still and flash
+        // Wind-up: stand still and flash (like the player charging a heavy)
         float windUp = 0.6f;
         for (float t = 0; t < windUp; t += Time.deltaTime)
         {
-            // Pulse warning
             foreach (var r in GetComponentsInChildren<Renderer>())
                 GameBootstrapper.SetHDRPEmission(r.material, _base.AccentColor,
                     4f + Mathf.Sin(t * 30f) * 6f);
             yield return null;
         }
 
-        // Slam — AoE 4m
+        // Slam — AoE 4m (mimics the player's heavy punch forward lunge)
         if (_target != null)
         {
             Vector3 dir = (_target.position - transform.position).normalized;
@@ -208,25 +398,12 @@ public class EnemyAI : MonoBehaviour
         if (_anim != null) _anim.SetInteger("AttackType", 0);
     }
 
-    IEnumerator FireArrow()
-    {
-        if (_target == null) yield break;
-
-        if (_anim != null) _anim.SetInteger("AttackType", 1);
-
-        // Spawn projectile
-        Vector3 origin = transform.position + Vector3.up * 1.5f;
-        Vector3 dir    = (_target.position + Vector3.up - origin).normalized;
-        SpawnProjectile(origin, dir, _base.AccentColor, GetDamage() * 0.7f, 18f);
-        yield return new WaitForSeconds(0.4f);
-        if (_anim != null) _anim.SetInteger("AttackType", 0);
-    }
-
     IEnumerator BossCombo()
     {
-        yield return StartCoroutine(ComboSlash(2));
+        // Boss mimics the full player combo: punch → kick → heavy slam
+        yield return StartCoroutine(MimicCombo(2));
         yield return new WaitForSeconds(0.2f);
-        yield return StartCoroutine(BerserkerSlam());
+        yield return StartCoroutine(MimicHeavySlam());
         // Chance to spawn a clone
         if (Random.value < 0.3f)
             SpawnClone();
@@ -239,11 +416,26 @@ public class EnemyAI : MonoBehaviour
     {
         float baseDmg = EnemyType switch
         {
-            "Grunt" => 12f,
-            "Elite" => 8f,
-            "Brute" => 22f,
-            "Boss"  => 20f,
-            _       => 12f
+            "Grunt"    => 12f,
+            "Elite"    => 8f,
+            "Brute"    => 22f,
+            "Boss"     => 20f,
+            "Arsonist" => 10f,
+            _          => 12f
+        };
+        return baseDmg * (1f + _base.WaveIndex * 0.1f);
+    }
+
+    float GetMimicDamage(int attackType)
+    {
+        // Mirror the player's damage types
+        float baseDmg = attackType switch
+        {
+            1 => 10f,  // Light Punch
+            2 => 20f,  // Heavy Punch
+            3 => 9f,   // Light Kick
+            4 => 22f,  // Heavy Kick
+            _ => 12f
         };
         return baseDmg * (1f + _base.WaveIndex * 0.1f);
     }

@@ -11,13 +11,13 @@ public class SplitScreenCamera : MonoBehaviour
     // ── Configuration ─────────────────────────────────────────────────────
     [Header("Follow")]
     public Transform TargetTransform;
-    public Vector3   Offset        = new Vector3(0f, 1.8f, -3.5f); // Very zoomed in, over the shoulder
-    public Vector3   LookAtOffset  = new Vector3(1.2f, 1.4f, 0f);  // Look at character's upper body / head
-    public float     SmoothTime    = 0.18f;
+    public Vector3   Offset        = new Vector3(0.85f, 1.6f, -2.8f); // Gears-style: right shoulder, chest height
+    public Vector3   LookAtOffset  = new Vector3(0.4f,  1.55f, 0f);  // Aim at upper torso / chin
+    public float     SmoothTime    = 0.12f;
 
     [Header("Zoom")]
-    public float BaseFOV           = 50f;
-    public float MaxFOV            = 75f;   // zoomed out when sprinting / flying
+    public float BaseFOV           = 55f;
+    public float MaxFOV            = 68f;   // widens slightly when sprinting / flying
     public float FOVLerpSpeed      = 5f;
 
     [Header("Shake")]

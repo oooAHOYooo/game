@@ -49,6 +49,12 @@ public class WeaponHitbox : MonoBehaviour
             _hitThisSwing.Add(other);
             enemy.TakeDamage(_damage, transform.root);
 
+            var nc = transform.root.GetComponentInChildren<NinjaController>();
+            if (nc != null && ComboSystem.Instance != null)
+            {
+                ComboSystem.Instance.RegisterHit(nc.PlayerIndex, _damage);
+            }
+
             // Hit-stop: pause both parties briefly for impact weight
             StartCoroutine(HitStop(0.06f));
 

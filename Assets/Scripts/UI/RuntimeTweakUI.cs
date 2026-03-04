@@ -103,7 +103,7 @@ public class RuntimeTweakUI : MonoBehaviour
 
         if (GUI.Button(new Rect(0, y, 100, 30), "Reset Camera"))
         {
-            GameSettings.CameraOffset = new Vector3(0, 10f, -16f);
+            GameSettings.CameraOffset = new Vector3(0.5f, 2.5f, -3.5f);
         }
 
         GUI.EndScrollView();

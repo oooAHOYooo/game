@@ -23,8 +23,7 @@ public class PlayerHealth : MonoBehaviour
         CurrentHP -= amount;
         CurrentHP = Mathf.Max(0, CurrentHP);
 
-        // Camera shake on hit
-        SplitScreenCamera.ShakeCamera(PlayerIndex, 0.15f, 0.3f);
+        ImpactFeedback.Play(amount, transform.position, PlayerIndex);
 
         if (CurrentHP <= 0 && IsAlive)
             StartCoroutine(Die());

@@ -1,11 +1,12 @@
 using UnityEngine;
 using UnityEngine.UI;
 using System.Collections;
+using System.Collections.Generic;
 
 /// <summary>
 /// GameHUD — cinematic runtime UI built entirely in code.
-/// Displays: HP bars, Ki meters (with charge glow), wave counter, ghost badge,
-/// wave banners, wave-clear fanfare, and intermission countdown.
+/// Displays: Heart-based HP (Super Mario 64 style), Ki meters (with charge glow),
+/// wave counter, ghost badge, wave banners, wave-clear fanfare, and intermission countdown.
 /// </summary>
 public class GameHUD : MonoBehaviour
 {
@@ -14,24 +15,31 @@ public class GameHUD : MonoBehaviour
     private NinjaController[]  _ctrls     = new NinjaController[2];
     private Village            _village;
 
+    // ── Heart config ──────────────────────────────────────────────────────
+    private const float HP_PER_HEART    = 20f;  // each heart = 20 HP
+    private const int   MAX_HEARTS      = 5;    // max hearts displayed per player
+    private const int   VILLAGE_HEARTS  = 10;   // village hearts
+
     // ── UI elements ───────────────────────────────────────────────────────
     // Player 1 (left side)
-    private Image _p1HPFill;
+    private List<Image> _p1Hearts = new List<Image>();
     private Image _p1KiFill;
     private Text  _p1Label;
+    private Text  _p1Combo;
 
     // Player 2 (right side)
-    private Image _p2HPFill;
+    private List<Image> _p2Hearts = new List<Image>();
     private Image _p2KiFill;
     private Text  _p2Label;
     private Text  _p2GhostBadge;
+    private Text  _p2Combo;
 
     // Wave info (centre top)
     private Text  _waveBanner;
     private Text  _intermissionText;
 
     // Village HP (centre top)
-    private Image _villageHPFill;
+    private List<Image> _villageHearts = new List<Image>();
     private Text  _villageLabel;
 
     // Divider line (split-screen centre)
@@ -39,6 +47,13 @@ public class GameHUD : MonoBehaviour
 
     // Moves list (top-left)
     private Text  _movesList;
+
+    // Heart colors
+    private static readonly Color HeartFull  = new Color(1f, 0.15f, 0.25f);
+    private static readonly Color HeartHalf  = new Color(1f, 0.5f, 0.55f);
+    private static readonly Color HeartEmpty = new Color(0.2f, 0.15f, 0.18f, 0.6f);
+    private static readonly Color VillageHeartFull  = new Color(0.2f, 0.85f, 0.3f);
+    private static readonly Color VillageHeartEmpty = new Color(0.12f, 0.18f, 0.12f, 0.5f);
 
     // ─────────────────────────────────────────────────────────────────────
     void Start()
@@ -82,8 +97,9 @@ public class GameHUD : MonoBehaviour
             GameBootstrapper.PaletteDeepNavy * 0.7f);
 
         _p1Label   = CreateLabel(p1Panel, "PLAYER 1", new Vector2(10f, -8f), 11, GameBootstrapper.PaletteGold);
-        _p1HPFill  = CreateBar(p1Panel, "HP",  new Vector2(10f, -28f), GameBootstrapper.PaletteCrimson,  GameBootstrapper.PaletteGold, out _);
-        _p1KiFill  = CreateBar(p1Panel, "KI",  new Vector2(10f, -50f), GameBootstrapper.PaletteCyan,     GameBootstrapper.PalettePurple, out _);
+        BuildHeartRow(p1Panel, _p1Hearts, MAX_HEARTS, new Vector2(10f, -28f), HeartFull);
+        _p1KiFill  = CreateBar(p1Panel, "KI",  new Vector2(10f, -54f), GameBootstrapper.PaletteCyan, GameBootstrapper.PalettePurple, out _);
+        _p1Combo   = CreateLabel(p1Panel, "", new Vector2(10f, -80f), 12, GameBootstrapper.PaletteGold);
 
         // ─── Player 2 panel (bottom-right) ───────────────────────────────
         var p2Panel = CreatePanel("P2Panel", new Vector2(0.75f, 0f), new Vector2(1f, 0.18f),
@@ -91,8 +107,9 @@ public class GameHUD : MonoBehaviour
 
         _p2Label      = CreateLabel(p2Panel, "PLAYER 2", new Vector2(10f, -8f),  11, GameBootstrapper.PaletteGhostBlue);
         _p2GhostBadge = CreateLabel(p2Panel, "[ GHOST AI ]", new Vector2(10f, -22f), 9, new Color(0.6f, 0.8f, 1f, 0.85f));
-        _p2HPFill     = CreateBar(p2Panel, "HP", new Vector2(10f, -40f), GameBootstrapper.PaletteCrimson,  GameBootstrapper.PaletteGhostBlue, out _);
-        _p2KiFill     = CreateBar(p2Panel, "KI", new Vector2(10f, -62f), GameBootstrapper.PaletteCyan,     GameBootstrapper.PalettePurple,    out _);
+        BuildHeartRow(p2Panel, _p2Hearts, MAX_HEARTS, new Vector2(10f, -40f), HeartFull);
+        _p2KiFill     = CreateBar(p2Panel, "KI", new Vector2(10f, -66f), GameBootstrapper.PaletteCyan, GameBootstrapper.PalettePurple, out _);
+        _p2Combo      = CreateLabel(p2Panel, "", new Vector2(10f, -92f), 12, GameBootstrapper.PaletteGold);
 
         // ─── Wave banner (centre top) ─────────────────────────────────────
         var bannerPanel = CreatePanel("BannerPanel", new Vector2(0.3f, 0.88f), new Vector2(0.7f, 1f),
@@ -113,22 +130,17 @@ public class GameHUD : MonoBehaviour
         iRT.offsetMin = iRT.offsetMax = Vector2.zero;
         _intermissionText.alignment = TextAnchor.MiddleCenter;
 
-        // ─── Ki weapon transform charge indicator ─────────────────────────
-        var xformPanel = CreatePanel("XformPanel", new Vector2(0.42f, 0f), new Vector2(0.58f, 0.025f),
-            new Color(0f, 0f, 0f, 0.5f));
-
-        // ─── Village HP bar (centre top, below banner) ────────────────────
-        var villPanel = CreatePanel("VillagePanel", new Vector2(0.32f, 0.80f), new Vector2(0.68f, 0.87f),
+        // ─── Village HP hearts (centre top, below banner) ─────────────────
+        var villPanel = CreatePanel("VillagePanel", new Vector2(0.30f, 0.78f), new Vector2(0.70f, 0.87f),
             new Color(0.03f, 0.03f, 0.08f, 0.65f));
-        _villageLabel  = CreateLabel(villPanel, "⛺  VILLAGE  ⛺", new Vector2(0f, -3f), 10, GameBootstrapper.PaletteGold);
+        _villageLabel  = CreateLabel(villPanel, "🏘  VILLAGE  🏘", new Vector2(0f, -3f), 10, GameBootstrapper.PaletteGold);
         var vlrt = _villageLabel.GetComponent<RectTransform>();
-        vlrt.anchorMin = new Vector2(0f, 0.5f);
+        vlrt.anchorMin = new Vector2(0f, 0.55f);
         vlrt.anchorMax = new Vector2(1f, 1f);
         vlrt.offsetMin = vlrt.offsetMax = Vector2.zero;
         _villageLabel.alignment = TextAnchor.MiddleCenter;
 
-        _villageHPFill = CreateBar(villPanel, "TOWN HP", new Vector2(10f, -20f),
-            new Color(0.20f, 0.70f, 0.15f), GameBootstrapper.PaletteGold, out _);
+        BuildHeartRow(villPanel, _villageHearts, VILLAGE_HEARTS, new Vector2(10f, -22f), VillageHeartFull, true);
 
         // ─── Centre divider (vertical line) ──────────────────────────────
         var dividerObj = new GameObject("CentreDivider");
@@ -157,16 +169,59 @@ public class GameHUD : MonoBehaviour
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    // REFRESH BARS
+    // HEART ROW BUILDER
+    // ─────────────────────────────────────────────────────────────────────
+    void BuildHeartRow(GameObject parent, List<Image> heartList, int count, Vector2 anchoredPos, Color fullColor, bool centred = false)
+    {
+        var rowObj = new GameObject("HeartRow");
+        rowObj.transform.SetParent(parent.transform, false);
+
+        var rowRT = rowObj.AddComponent<RectTransform>();
+        rowRT.anchorMin = new Vector2(0f, 1f);
+        rowRT.anchorMax = new Vector2(1f, 1f);
+        rowRT.pivot = new Vector2(centred ? 0.5f : 0f, 1f);
+        rowRT.anchoredPosition = centred ? new Vector2(0f, anchoredPos.y) : anchoredPos;
+        rowRT.sizeDelta = new Vector2(-20f, 22f);
+
+        if (centred)
+        {
+            rowRT.anchorMin = new Vector2(0.5f, 1f);
+            rowRT.anchorMax = new Vector2(0.5f, 1f);
+        }
+
+        float heartSize = 18f;
+        float spacing = 2f;
+        float totalWidth = count * heartSize + (count - 1) * spacing;
+        float startX = centred ? -totalWidth * 0.5f : 0f;
+
+        for (int i = 0; i < count; i++)
+        {
+            var heartObj = new GameObject("Heart_" + i);
+            heartObj.transform.SetParent(rowObj.transform, false);
+
+            var heartImg = heartObj.AddComponent<Image>();
+            heartImg.color = fullColor;
+
+            var hRT = heartObj.GetComponent<RectTransform>();
+            hRT.anchorMin = new Vector2(0f, 0.5f);
+            hRT.anchorMax = new Vector2(0f, 0.5f);
+            hRT.pivot = new Vector2(0f, 0.5f);
+            hRT.anchoredPosition = new Vector2(startX + i * (heartSize + spacing), 0f);
+            hRT.sizeDelta = new Vector2(heartSize, heartSize);
+
+            heartList.Add(heartImg);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // REFRESH HEARTS & BARS
     // ─────────────────────────────────────────────────────────────────────
     void RefreshPlayerBars()
     {
-        // Player 1
+        // Player 1 hearts
         if (_players[0] != null)
-        {
-            float hpRatio = _players[0].CurrentHP / _players[0].MaxHP;
-            SetBarFill(_p1HPFill, hpRatio);
-        }
+            UpdateHearts(_p1Hearts, _players[0].CurrentHP, _players[0].MaxHP, HeartFull, HeartHalf, HeartEmpty);
+
         if (_ctrls[0] != null)
         {
             float kiRatio = _ctrls[0].CurrentKi / _ctrls[0].KiMax;
@@ -174,12 +229,10 @@ public class GameHUD : MonoBehaviour
             PulseKiBar(_p1KiFill, _ctrls[0]);
         }
 
-        // Player 2
+        // Player 2 hearts
         if (_players[1] != null)
-        {
-            float hpRatio = _players[1].CurrentHP / _players[1].MaxHP;
-            SetBarFill(_p2HPFill, hpRatio);
-        }
+            UpdateHearts(_p2Hearts, _players[1].CurrentHP, _players[1].MaxHP, HeartFull, HeartHalf, HeartEmpty);
+
         if (_ctrls[1] != null)
         {
             float kiRatio = _ctrls[1].CurrentKi / _ctrls[1].KiMax;
@@ -191,20 +244,61 @@ public class GameHUD : MonoBehaviour
                 _p2GhostBadge.enabled = _ctrls[1].IsGhost;
         }
 
-        // Village HP
-        if (_village != null && _villageHPFill != null)
+        UpdateComboCount(_p1Combo, 0);
+        UpdateComboCount(_p2Combo, 1);
+
+        // Village hearts
+        if (_village != null)
+            UpdateHearts(_villageHearts, _village.CurrentHP, _village.MaxHP, VillageHeartFull, VillageHeartFull * 0.7f, VillageHeartEmpty);
+    }
+
+    void UpdateHearts(List<Image> hearts, float currentHP, float maxHP, Color fullColor, Color halfColor, Color emptyColor)
+    {
+        if (hearts == null || hearts.Count == 0) return;
+
+        int totalHearts = hearts.Count;
+        float hpPerHeart = maxHP / totalHearts;
+
+        for (int i = 0; i < totalHearts; i++)
         {
-            SetBarFill(_villageHPFill, _village.GetHealthRatio());
-            // Flash bar red when low
-            if (_village.GetHealthRatio() < 0.3f)
+            if (hearts[i] == null) continue;
+
+            float heartStart = i * hpPerHeart;
+            float heartEnd   = (i + 1) * hpPerHeart;
+            float heartMid   = heartStart + hpPerHeart * 0.5f;
+
+            if (currentHP >= heartEnd)
             {
-                float pulse = 0.6f + Mathf.Sin(Time.time * 6f) * 0.4f;
-                _villageHPFill.color = new Color(0.9f, 0.1f, 0.1f, pulse);
+                // Full heart
+                hearts[i].color = fullColor;
+                hearts[i].transform.localScale = Vector3.one;
+            }
+            else if (currentHP >= heartMid)
+            {
+                // Half heart
+                hearts[i].color = halfColor;
+                hearts[i].transform.localScale = Vector3.one * 0.85f;
+            }
+            else if (currentHP > heartStart)
+            {
+                // Quarter heart — small and fading
+                hearts[i].color = Color.Lerp(emptyColor, halfColor, 0.4f);
+                hearts[i].transform.localScale = Vector3.one * 0.7f;
             }
             else
             {
-                _villageHPFill.color = new Color(0.20f, 0.70f, 0.15f, 1f);
+                // Empty heart
+                hearts[i].color = emptyColor;
+                hearts[i].transform.localScale = Vector3.one * 0.6f;
             }
+        }
+
+        // Pulse the last active heart for drama
+        int lastActiveHeart = Mathf.FloorToInt(currentHP / hpPerHeart);
+        if (lastActiveHeart >= 0 && lastActiveHeart < totalHearts && currentHP > 0 && currentHP < maxHP * 0.3f)
+        {
+            float pulse = 0.85f + Mathf.Sin(Time.time * 8f) * 0.15f;
+            hearts[Mathf.Min(lastActiveHeart, totalHearts - 1)].transform.localScale = Vector3.one * pulse;
         }
     }
 
@@ -212,6 +306,24 @@ public class GameHUD : MonoBehaviour
     {
         if (bar == null) return;
         bar.fillAmount = Mathf.Lerp(bar.fillAmount, ratio, 10f * Time.deltaTime);
+    }
+
+    void UpdateComboCount(Text comboText, int playerIndex)
+    {
+        if (comboText == null || ComboSystem.Instance == null) return;
+        
+        int combo = ComboSystem.Instance.GetComboCount(playerIndex);
+        if (combo > 1)
+        {
+            float multi = ComboSystem.Instance.GetMultiplier(playerIndex);
+            comboText.text = $"COMBO {combo}  (x{multi:F1} KI)";
+            comboText.color = multi >= GameSettings.ComboTier3Multiplier ? GameBootstrapper.PaletteMagenta : 
+                              multi >= GameSettings.ComboTier2Multiplier ? GameBootstrapper.PaletteCyan : GameBootstrapper.PaletteGold;
+        }
+        else
+        {
+            comboText.text = "";
+        }
     }
 
     void PulseKiBar(Image bar, NinjaController ctrl)

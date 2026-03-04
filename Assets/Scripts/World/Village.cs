@@ -26,6 +26,7 @@ public class Village : MonoBehaviour
     // ── References ────────────────────────────────────────────────────────
     public Transform VillageRoot { get; private set; }
     private List<GameObject> _huts = new List<GameObject>();
+    public List<GameObject> Huts => _huts;
     private List<Villager>   _villagers = new List<Villager>();
     private GameObject       _totem;
     private bool             _isDestroyed = false;
@@ -42,6 +43,38 @@ public class Village : MonoBehaviour
         BuildCampfires(centre);
         BuildFence(centre);
         SpawnVillagers(centre);
+    }
+
+    void Update()
+    {
+        if (_isDestroyed || _totem == null) return;
+
+        bool playerNear = false;
+        var players = FindObjectsByType<NinjaController>(FindObjectsSortMode.None);
+        foreach (var p in players)
+        {
+            if (Vector3.Distance(p.transform.position, _totem.transform.position) <= GameSettings.TotemHealRadius)
+            {
+                playerNear = true;
+                break;
+            }
+        }
+
+        if (playerNear)
+        {
+            if (VillageFireSystem.Instance != null)
+                VillageFireSystem.Instance.ExtinguishFires(_totem.transform.position, GameSettings.TotemHealRadius * 1.5f);
+
+            // Heal village slowly over time
+            float newHP = Mathf.Min(MaxHP, CurrentHP + GameSettings.TotemHealRate * Time.deltaTime);
+            if (newHP > CurrentHP) CurrentHP = newHP;
+            
+            // Subtle pulse on totem to indicate healing
+            foreach (var r in _totem.GetComponentsInChildren<Renderer>())
+            {
+                GameBootstrapper.SetHDRPEmission(r.material, GameBootstrapper.PaletteCyan, 8f + Mathf.PingPong(Time.time * 5f, 4f));
+            }
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -285,6 +318,8 @@ public class Village : MonoBehaviour
             fl.intensity = 800f;
             var hdl = lightObj.AddComponent<UnityEngine.Rendering.HighDefinition.HDAdditionalLightData>();
             hdl.range     = 5f;
+
+            if (DayNightCycle.Instance != null) DayNightCycle.Instance.RegisterCampfire(fl);
         }
     }
 

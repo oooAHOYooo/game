@@ -36,19 +36,19 @@ public class AnimationLibrary
         var set = new AnimationSet();
 
         // Load locomotion animations
-        set.Idle = FindBestMatch(LOCOMOTION_FOLDER, new[] { "Idle", "idle" }, exact: true);
-        set.Run = FindBestMatch(LOCOMOTION_FOLDER, new[] { "Run Forward", "Standing Run Forward", "run" });
-        set.Sprint = FindBestMatch(LOCOMOTION_FOLDER, new[] { "Sprint Forward", "Standing Sprint Forward", "sprint" });
-        set.Jump = FindBestMatch(LOCOMOTION_FOLDER, new[] { "Standing Jump", "Jump", "jump" });
-        set.Fall = FindBestMatch(LOCOMOTION_FOLDER, new[] { "Fall A Loop", "Fall B Loop", "Fall", "fall" });
-        set.Land = FindBestMatch(LOCOMOTION_FOLDER, new[] { "Fall A Land To Standing Idle 01", "Land", "land" });
+        set.Idle = FindBestMatch(LOCOMOTION_FOLDER, new[] { "Idle" }, exact: true);
+        set.Run = FindBestMatch(LOCOMOTION_FOLDER, new[] { "Standing Run Forward" }, exact: true);
+        set.Sprint = FindBestMatch(LOCOMOTION_FOLDER, new[] { "Standing Sprint Forward" }, exact: true);
+        set.Jump = FindBestMatch(LOCOMOTION_FOLDER, new[] { "Standing Jump" }, exact: true);
+        set.Fall = FindBestMatch(LOCOMOTION_FOLDER, new[] { "Fall A Loop" }, exact: true);
+        set.Land = FindBestMatch(LOCOMOTION_FOLDER, new[] { "Fall A Land To Standing Idle 01" }, exact: true);
 
         // Load combat animations — UFC-style punches and kicks
-        set.LightPunch = FindBestMatch(COMBAT_FOLDER, new[] { "Punching", "Boxing", "Standing Melee Attack" });
-        set.HeavyPunch = FindBestMatch(COMBAT_FOLDER, new[] { "Stabbing", "Boxing (1)", "Heavy Punch" });
-        set.LightKick = FindBestMatch(COMBAT_FOLDER, new[] { "Standing Melee Attack Horizontal", "Kick", "kick" });
-        set.HeavyKick = FindBestMatch(COMBAT_FOLDER, new[] { "Standing Aim Overdraw", "Heavy Kick" });
-        set.ChargeAttack = FindBestMatch(COMBAT_FOLDER, new[] { "Standing Aim Overdraw", "Charge" });
+        set.LightPunch   = FindBestMatch(COMBAT_FOLDER, new[] { "Punching" }, exact: true);
+        set.HeavyPunch   = FindBestMatch(COMBAT_FOLDER, new[] { "Boxing (1)" }, exact: true);
+        set.LightKick    = FindBestMatch(COMBAT_FOLDER, new[] { "Boxing" }, exact: true); // no kick found, mapped to second boxing
+        set.HeavyKick    = FindBestMatch(COMBAT_FOLDER, new[] { "Standing Melee Attack Horizontal" }, exact: true);
+        set.ChargeAttack = FindBestMatch(COMBAT_FOLDER, new[] { "Standing Aim Overdraw" }, exact: true);
 
         return set;
     }

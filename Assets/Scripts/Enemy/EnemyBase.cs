@@ -1,9 +1,10 @@
 using UnityEngine;
+using UnityEngine.UI;
 using System.Collections;
 using System.Collections.Generic;
 
 /// <summary>
-/// EnemyBase — shared HP, state machine, and visual identity for all enemy types.
+/// EnemyBase — shared HP, state machine, visual identity, and floating heart UI for all enemy types.
 /// Extended by EnemyAI for behaviour.
 /// </summary>
 [RequireComponent(typeof(Rigidbody))]
@@ -27,6 +28,16 @@ public class EnemyBase : MonoBehaviour
     private   float        _flashTimer;
     private   bool         _isFlashing;
 
+    // ── Floating Heart UI ─────────────────────────────────────────────────
+    private const int   ENEMY_HEART_COUNT = 3;
+    private const float HEART_SIZE        = 0.18f;
+    private List<Image> _heartImages = new List<Image>();
+    private Canvas      _heartCanvas;
+
+    private static readonly Color EnemyHeartFull  = new Color(0.85f, 0.1f, 0.15f);
+    private static readonly Color EnemyHeartHalf  = new Color(1f, 0.45f, 0.45f);
+    private static readonly Color EnemyHeartEmpty = new Color(0.25f, 0.1f, 0.1f, 0.4f);
+
     // ─────────────────────────────────────────────────────────────────────
     protected virtual void Awake()
     {
@@ -39,9 +50,97 @@ public class EnemyBase : MonoBehaviour
         _rb.linearDamping        = 3f;
     }
 
+    protected virtual void Start()
+    {
+        BuildFloatingHearts();
+    }
+
     protected virtual void Update()
     {
         if (_isFlashing) FlashTick();
+        UpdateFloatingHearts();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // FLOATING HEART UI
+    // ─────────────────────────────────────────────────────────────────────
+    void BuildFloatingHearts()
+    {
+        var canvasObj = new GameObject("EnemyHeartCanvas");
+        canvasObj.transform.SetParent(transform);
+        canvasObj.transform.localPosition = Vector3.up * 2.5f;
+
+        _heartCanvas = canvasObj.AddComponent<Canvas>();
+        _heartCanvas.renderMode = RenderMode.WorldSpace;
+
+        var scaler = canvasObj.AddComponent<CanvasScaler>();
+        scaler.dynamicPixelsPerUnit = 10f;
+
+        var canvasRT = canvasObj.GetComponent<RectTransform>();
+        canvasRT.sizeDelta = new Vector2(ENEMY_HEART_COUNT * 1.2f, 1f);
+        canvasObj.transform.localScale = Vector3.one * 0.5f;
+
+        float totalWidth = ENEMY_HEART_COUNT * HEART_SIZE + (ENEMY_HEART_COUNT - 1) * 0.04f;
+        float startX = -totalWidth * 0.5f;
+
+        for (int i = 0; i < ENEMY_HEART_COUNT; i++)
+        {
+            var heartObj = new GameObject("EnemyHeart_" + i);
+            heartObj.transform.SetParent(canvasObj.transform, false);
+            var img = heartObj.AddComponent<Image>();
+            img.color = EnemyHeartFull;
+
+            var rt = heartObj.GetComponent<RectTransform>();
+            rt.anchorMin = new Vector2(0.5f, 0.5f);
+            rt.anchorMax = new Vector2(0.5f, 0.5f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = new Vector2(startX + i * (HEART_SIZE + 0.04f) + HEART_SIZE * 0.5f, 0f);
+            rt.sizeDelta = new Vector2(HEART_SIZE, HEART_SIZE);
+
+            _heartImages.Add(img);
+        }
+    }
+
+    void UpdateFloatingHearts()
+    {
+        if (_heartCanvas == null || _heartImages.Count == 0) return;
+
+        // Billboard: face main camera
+        var cam = Camera.main;
+        if (cam != null)
+            _heartCanvas.transform.rotation = Quaternion.LookRotation(_heartCanvas.transform.position - cam.transform.position);
+
+        // Update heart colors
+        float hpPerHeart = MaxHP / ENEMY_HEART_COUNT;
+        for (int i = 0; i < ENEMY_HEART_COUNT; i++)
+        {
+            if (_heartImages[i] == null) continue;
+
+            float heartStart = i * hpPerHeart;
+            float heartEnd   = (i + 1) * hpPerHeart;
+            float heartMid   = heartStart + hpPerHeart * 0.5f;
+
+            if (CurrentHP >= heartEnd)
+            {
+                _heartImages[i].color = EnemyHeartFull;
+                _heartImages[i].transform.localScale = Vector3.one;
+            }
+            else if (CurrentHP >= heartMid)
+            {
+                _heartImages[i].color = EnemyHeartHalf;
+                _heartImages[i].transform.localScale = Vector3.one * 0.85f;
+            }
+            else if (CurrentHP > heartStart)
+            {
+                _heartImages[i].color = Color.Lerp(EnemyHeartEmpty, EnemyHeartHalf, 0.4f);
+                _heartImages[i].transform.localScale = Vector3.one * 0.7f;
+            }
+            else
+            {
+                _heartImages[i].color = EnemyHeartEmpty;
+                _heartImages[i].transform.localScale = Vector3.one * 0.55f;
+            }
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -53,6 +152,8 @@ public class EnemyBase : MonoBehaviour
 
         CurrentHP -= amount;
         CurrentHP = Mathf.Max(0, CurrentHP);
+
+        ImpactFeedback.Play(amount, transform.position);
 
         // Damage flash
         StartCoroutine(DamageFlash());
@@ -92,6 +193,10 @@ public class EnemyBase : MonoBehaviour
         // Notify wave manager
         var wm = FindAnyObjectByType<WaveManager>();
         if (wm != null) wm.OnEnemyDied(this);
+
+        // Hide hearts
+        if (_heartCanvas != null)
+            _heartCanvas.gameObject.SetActive(false);
 
         // Death burst VFX
         SpawnDeathVFX();
@@ -161,6 +266,12 @@ public class EnemyBase : MonoBehaviour
     {
         return BuildEnemyBase("Boss", spawnPos, 200f,
             new Color(1f, 0.2f, 0f), waveIndex, 1.6f);
+    }
+
+    public static GameObject BuildArsonist(Vector3 spawnPos, int waveIndex)
+    {
+        return BuildEnemyBase("Arsonist", spawnPos, 50f,
+            new Color(1f, 0.4f, 0.05f), waveIndex, 1.05f);
     }
 
     static GameObject BuildEnemyBase(string typeName, Vector3 pos, float hp, Color accent, int wave, float scale)

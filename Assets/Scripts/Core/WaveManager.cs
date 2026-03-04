@@ -3,8 +3,9 @@ using System.Collections;
 using System.Collections.Generic;
 
 /// <summary>
-/// WaveManager — spawns enemies in waves (3 → 5 → 8 → 8+scaling) and manages
+/// WaveManager — spawns enemies in escalating waves and manages
 /// the Zelda-style 1v1 engagement queue. One enemy fights at a time; others circle.
+/// The more enemies you defeat, the more come! Includes arsonist enemies.
 /// </summary>
 public class WaveManager : MonoBehaviour
 {
@@ -12,15 +13,19 @@ public class WaveManager : MonoBehaviour
     public Village    IslandVillage;  // village HP & celebration
 
     // ── Wave config ───────────────────────────────────────────────────────
-    private static readonly int[] WaveSizes   = { 3, 5, 8 };
     private const float SpawnEdgeRadius       = 160f;  // ocean edge of island
     private const float IntermissionDuration  = 5f;
     private const float WaveClearPause        = 3f;
     private const float VillageDamageRadius   = 25f;   // if enemy gets this close, village takes damage
+    private const float REINFORCEMENT_DELAY   = 4f;    // seconds between mid-wave reinforcement checks
 
     // ── State ─────────────────────────────────────────────────────────────
     public  int    CurrentWave    = 0;
     private int    _aliveCount    = 0;
+    private int    _totalKills    = 0;
+    private int    _waveMaxSpawn  = 0;   // total enemies for current wave
+    private int    _waveSpawned   = 0;   // how many have spawned so far this wave
+    private bool   _waveActive    = false;
 
     // Engagement queue
     private Queue<EnemyBase>  _engageQueue  = new Queue<EnemyBase>();
@@ -40,6 +45,9 @@ public class WaveManager : MonoBehaviour
 
         while (true)
         {
+            if (DayNightCycle.Instance != null) DayNightCycle.Instance.SetPhase(DayNightCycle.Phase.Sunset);
+            yield return new WaitForSeconds(2f);
+
             yield return StartCoroutine(SpawnWave(CurrentWave));
             yield return StartCoroutine(WaitForWaveClear());
             yield return StartCoroutine(Intermission());
@@ -55,9 +63,16 @@ public class WaveManager : MonoBehaviour
         _allEnemies.Clear();
         _engageQueue.Clear();
         _activeEnemy = null;
+        _waveActive  = true;
 
-        int count     = GetWaveSize(waveIndex);
-        var enemyList = BuildWaveComposition(waveIndex, count);
+        if (DayNightCycle.Instance != null) DayNightCycle.Instance.SetPhase(DayNightCycle.Phase.Night);
+
+        int count         = GetWaveSize(waveIndex);
+        _waveMaxSpawn     = count + Mathf.FloorToInt(count * 0.5f); // allow 50% bonus reinforcements
+        int initialSpawn  = count;
+        _waveSpawned      = 0;
+
+        var enemyList = BuildWaveComposition(waveIndex, initialSpawn);
 
         // Notify HUD
         var hud = FindAnyObjectByType<GameHUD>();
@@ -66,26 +81,64 @@ public class WaveManager : MonoBehaviour
         // Spawn enemies one-by-one with a tiny delay each
         for (int i = 0; i < enemyList.Count; i++)
         {
-            Vector3 spawnPos = GetSpawnPosition(i, enemyList.Count);
-
-            GameObject enemyGO = enemyList[i] switch
-            {
-                "Elite" => EnemyBase.BuildShadowArcher(spawnPos, waveIndex),
-                "Brute" => EnemyBase.BuildBerserker(spawnPos, waveIndex),
-                "Boss"  => EnemyBase.BuildMiniBoss(spawnPos, waveIndex),
-                _       => EnemyBase.BuildFootSoldier(spawnPos, waveIndex)
-            };
-
-            var eb = enemyGO.GetComponent<EnemyBase>();
-            _allEnemies.Add(eb);
-            _engageQueue.Enqueue(eb);
-            _aliveCount++;
-
+            SpawnSingleEnemy(enemyList[i], i, enemyList.Count, waveIndex);
             yield return new WaitForSeconds(0.3f);
         }
 
         // Kick off the first engagement
         PromoteNextEnemy();
+
+        // Start reinforcement coroutine
+        StartCoroutine(ReinforcementLoop(waveIndex));
+    }
+
+    void SpawnSingleEnemy(string type, int index, int total, int waveIndex)
+    {
+        Vector3 spawnPos = GetSpawnPosition(index, total);
+
+        GameObject enemyGO = type switch
+        {
+            "Elite"    => EnemyBase.BuildShadowArcher(spawnPos, waveIndex),
+            "Brute"    => EnemyBase.BuildBerserker(spawnPos, waveIndex),
+            "Boss"     => EnemyBase.BuildMiniBoss(spawnPos, waveIndex),
+            "Arsonist" => EnemyBase.BuildArsonist(spawnPos, waveIndex),
+            _          => EnemyBase.BuildFootSoldier(spawnPos, waveIndex)
+        };
+
+        var eb = enemyGO.GetComponent<EnemyBase>();
+        _allEnemies.Add(eb);
+        _engageQueue.Enqueue(eb);
+        _aliveCount++;
+        _waveSpawned++;
+    }
+
+    /// <summary>
+    /// Mid-wave reinforcement: as enemies die, spawn more to keep the pressure up.
+    /// "The more enemies you defeat, the more come!"
+    /// </summary>
+    IEnumerator ReinforcementLoop(int waveIndex)
+    {
+        while (_waveActive)
+        {
+            yield return new WaitForSeconds(REINFORCEMENT_DELAY);
+
+            if (!_waveActive) break;
+
+            // Only reinforce if we haven't hit the wave's max and there are fewer alive than desired
+            int desiredAlive = Mathf.Max(2, GetWaveSize(waveIndex) / 2);
+            if (_aliveCount < desiredAlive && _waveSpawned < _waveMaxSpawn)
+            {
+                int toSpawn = Mathf.Min(2, _waveMaxSpawn - _waveSpawned);
+                var reinforcements = BuildWaveComposition(waveIndex, toSpawn);
+                for (int i = 0; i < reinforcements.Count; i++)
+                {
+                    SpawnSingleEnemy(reinforcements[i], i, reinforcements.Count, waveIndex);
+                }
+                // Ensure we have an active engagement
+                if (_activeEnemy == null || !_activeEnemy.IsAlive)
+                    PromoteNextEnemy();
+            }
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -115,6 +168,7 @@ public class WaveManager : MonoBehaviour
     {
         _aliveCount = Mathf.Max(0, _aliveCount - 1);
         _allEnemies.Remove(enemy);
+        _totalKills++;
 
         if (_activeEnemy == enemy)
             PromoteNextEnemy();
@@ -135,6 +189,7 @@ public class WaveManager : MonoBehaviour
     {
         while (_aliveCount > 0) yield return new WaitForSeconds(0.1f);
 
+        _waveActive = false;
 
         // Celebration VFX
         SpawnClearVFX();
@@ -154,6 +209,7 @@ public class WaveManager : MonoBehaviour
 
     IEnumerator Intermission()
     {
+        if (DayNightCycle.Instance != null) DayNightCycle.Instance.SetPhase(DayNightCycle.Phase.Day);
 
         var hud = FindAnyObjectByType<GameHUD>();
         for (int i = Mathf.RoundToInt(IntermissionDuration); i > 0; i--)
@@ -169,9 +225,8 @@ public class WaveManager : MonoBehaviour
     // ─────────────────────────────────────────────────────────────────────
     int GetWaveSize(int waveIndex)
     {
-        if (waveIndex < WaveSizes.Length) return WaveSizes[waveIndex];
-        // After predefined waves: repeat 8 with escalating stats
-        return 8;
+        // Endless escalation: starts at 3, grows each wave
+        return 3 + waveIndex * 2;
     }
 
     List<string> BuildWaveComposition(int waveIndex, int count)
@@ -191,20 +246,33 @@ public class WaveManager : MonoBehaviour
         }
         else if (waveIndex == 2)
         {
-            // Wave 3: grunts + 2 elites + 1 brute
+            // Wave 3: grunts + elites + 1 arsonist
+            list.Add("Arsonist");
+            list.Add("Elite");
+            for (int i = 2; i < count; i++) list.Add("Grunt");
+        }
+        else if (waveIndex == 3)
+        {
+            // Wave 4: brute + elites + arsonists
             list.Add("Brute");
+            list.Add("Arsonist");
             list.Add("Elite");
             list.Add("Elite");
-            for (int i = 3; i < count; i++) list.Add("Grunt");
+            for (int i = 4; i < count; i++) list.Add("Grunt");
         }
         else
         {
-            // Wave 4+: increasing complexity
+            // Wave 5+: boss + escalating complexity + always arsonists
             list.Add("Boss");
-            int remaining = count - 1;
+            int arsonists = Mathf.Min(waveIndex - 2, count / 3); // more arsonists over time
+            for (int i = 0; i < arsonists; i++) list.Add("Arsonist");
+            int remaining = count - 1 - arsonists;
             int elites    = remaining / 3;
-            for (int i = 0; i < elites; i++)   list.Add("Elite");
-            for (int i = elites; i < remaining; i++) list.Add("Grunt");
+            int brutes    = remaining / 5;
+            for (int i = 0; i < brutes; i++)  list.Add("Brute");
+            for (int i = 0; i < elites; i++)  list.Add("Elite");
+            int grunts = remaining - elites - brutes;
+            for (int i = 0; i < grunts; i++)  list.Add("Grunt");
         }
 
         // Shuffle
@@ -252,6 +320,10 @@ public class WaveManager : MonoBehaviour
             foreach (var e in _allEnemies)
             {
                 if (e == null || !e.IsAlive) continue;
+                // Skip arsonists — they manage their own village damage
+                var ai = e.GetComponent<EnemyAI>();
+                if (ai != null && ai.EnemyType == "Arsonist") continue;
+
                 float dist = Vector3.Distance(e.transform.position, IslandVillage.Centre);
                 if (dist < GameSettings.VillageDamageRadius)
                 {

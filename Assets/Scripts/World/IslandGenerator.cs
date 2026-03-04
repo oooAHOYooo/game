@@ -1,8 +1,8 @@
 using UnityEngine;
 
 /// <summary>
-/// IslandGenerator — procedurally builds a large island with Perlin noise terrain,
-/// ocean, beaches, forests, rocks, and cliffs. Players are god-sized (Gulliver scale).
+/// IslandGenerator — procedurally builds a tropical ancient island with Perlin noise terrain,
+/// turquoise ocean, white sand beaches, lush green forests, mossy rocks, ancient ruins, and cliffs.
 /// </summary>
 public class IslandGenerator : MonoBehaviour
 {
@@ -10,17 +10,19 @@ public class IslandGenerator : MonoBehaviour
     public const float IslandRadius     = 150f;    // total radius of the island
     public const float TerrainSize      = 300f;    // terrain plane size
     public const float MaxHeight        = 18f;     // peak height
-    public const float WaterLevel       = 0.3f;    // y-level of ocean surface (referenced by GameSettings, but const here for internal mesh logic if needed)
+    public const float WaterLevel       = 0.3f;    // y-level of ocean surface
     public const int   TerrainRes       = 128;     // mesh resolution
 
-    // ── Palette ───────────────────────────────────────────────────────────
-    private static readonly Color GrassGreen   = new Color(0.1f, 0.05f, 0.2f);
-    private static readonly Color GrassDark    = new Color(0.05f, 0.05f, 0.15f);
-    private static readonly Color SandColor    = new Color(0.2f, 0.1f, 0.3f);
-    private static readonly Color RockGray     = new Color(0.1f, 0.25f, 0.25f);
-    private static readonly Color OceanDeep    = new Color(0.05f, 0.3f, 0.5f);
-    private static readonly Color OceanSurf    = new Color(0.1f, 0.6f, 0.8f);
-    private static readonly Color OceanFoam    = new Color(0.4f, 0.9f, 1.0f);
+    // ── Tropical Palette ──────────────────────────────────────────────────
+    private static readonly Color GrassGreen   = new Color(0.08f, 0.55f, 0.15f);   // vibrant emerald
+    private static readonly Color GrassDark    = new Color(0.04f, 0.38f, 0.12f);   // deep jungle green
+    private static readonly Color SandColor    = new Color(0.96f, 0.90f, 0.72f);   // warm white sand
+    private static readonly Color RockGray     = new Color(0.45f, 0.42f, 0.38f);   // weathered stone
+    private static readonly Color OceanDeep    = new Color(0.02f, 0.18f, 0.42f);   // deep tropical blue
+    private static readonly Color OceanSurf    = new Color(0.05f, 0.70f, 0.78f);   // turquoise surf
+    private static readonly Color OceanFoam    = new Color(0.75f, 0.98f, 1.0f);    // bright seafoam
+    private static readonly Color MossColor    = new Color(0.15f, 0.50f, 0.10f);   // mossy green
+    private static readonly Color RuinStone    = new Color(0.52f, 0.48f, 0.40f);   // ancient sandstone
 
     public Transform IslandRoot { get; private set; }
 
@@ -32,9 +34,10 @@ public class IslandGenerator : MonoBehaviour
         BuildTerrain();
         BuildOcean();
         BuildBeachRing();
-        PlaceTrees(GameSettings.TreeCount);
-        PlaceRocks(GameSettings.RockCount);
-        PlaceGrassPatches(80);
+        PlaceTrees(GameSettings.TreeCount + 30);          // more lush vegetation
+        PlaceRocks(GameSettings.RockCount + 15);
+        PlaceGrassPatches(120);                           // denser grass
+        PlaceAncientRuins(18);                            // the new ancient ruins
         BuildSkybox();
     }
 
@@ -102,11 +105,11 @@ public class IslandGenerator : MonoBehaviour
                 verts[i] = new Vector3(xPos, height, zPos);
                 uvs[i]   = new Vector2(x / (float)res, z / (float)res);
 
-                // Vertex colour for terrain tinting
+                // Vertex colour for tropical terrain tinting
                 if (height < WaterLevel + 0.5f)
-                    colors[i] = SandColor;        // beach
+                    colors[i] = SandColor;        // white beach sand
                 else if (height > GameSettings.TerrainMaxHeight * 0.65f)
-                    colors[i] = RockGray;         // rocky peaks
+                    colors[i] = Color.Lerp(RockGray, MossColor, Mathf.PerlinNoise(nx * 2f, nz * 2f) * 0.5f); // mossy rocky peaks
                 else
                     colors[i] = Color.Lerp(GrassGreen, GrassDark, Mathf.PerlinNoise(nx * 3f, nz * 3f));
             }
@@ -140,7 +143,7 @@ public class IslandGenerator : MonoBehaviour
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    // OCEAN
+    // OCEAN — turquoise tropical water
     // ─────────────────────────────────────────────────────────────────────
     void BuildOcean()
     {
@@ -149,8 +152,8 @@ public class IslandGenerator : MonoBehaviour
         ocean.name = "Ocean";
         ocean.transform.SetParent(IslandRoot);
         ocean.transform.position   = new Vector3(0, WaterLevel, 0);
-        ocean.transform.localScale = new Vector3(80f, 1f, 80f); // 800m × 800m
-        Destroy(ocean.GetComponent<Collider>()); // don't collide with players
+        ocean.transform.localScale = new Vector3(80f, 1f, 80f);
+        Destroy(ocean.GetComponent<Collider>());
 
         var mat = new Material(GameBootstrapper.GetHDRPLitShader());
         mat.color = OceanSurf;
@@ -159,13 +162,13 @@ public class IslandGenerator : MonoBehaviour
         GameBootstrapper.SetHDRPEmission(mat, OceanDeep, 0.5f);
         ocean.GetComponent<Renderer>().material = mat;
 
-        // Animated ocean shimmer (subtle particle layer)
+        // Animated ocean shimmer
         var shimmer = new GameObject("OceanShimmer");
         shimmer.transform.SetParent(IslandRoot);
         shimmer.transform.position = new Vector3(0, WaterLevel + 0.1f, 0);
         var ps   = shimmer.AddComponent<ParticleSystem>();
         var main = ps.main;
-        ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear); // Ensure it doesn't auto-play before setup
+        ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
         main.loop            = true;
         main.duration        = 5f;
         main.startLifetime   = 3f;
@@ -186,7 +189,7 @@ public class IslandGenerator : MonoBehaviour
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    // BEACH RING — sand-coloured ring around the island edge
+    // BEACH RING — warm sand ring around the island edge
     // ─────────────────────────────────────────────────────────────────────
     void BuildBeachRing()
     {
@@ -205,12 +208,12 @@ public class IslandGenerator : MonoBehaviour
                 Random.Range(8f, 16f), Random.Range(0.2f, 0.5f), Random.Range(8f, 16f));
             sand.transform.rotation = Quaternion.Euler(0, Random.Range(0, 360f), 0);
             Destroy(sand.GetComponent<Collider>());
-            GameBootstrapper.SetMaterialColor(sand, Color.Lerp(SandColor, GrassGreen, Random.Range(0f, 0.2f)));
+            GameBootstrapper.SetMaterialColor(sand, Color.Lerp(SandColor, new Color(0.92f, 0.85f, 0.65f), Random.Range(0f, 0.3f)));
         }
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    // TREES
+    // TREES — tropical palms and lush canopy
     // ─────────────────────────────────────────────────────────────────────
     void PlaceTrees(int count)
     {
@@ -238,7 +241,7 @@ public class IslandGenerator : MonoBehaviour
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    // ROCKS
+    // ROCKS — mossy boulders
     // ─────────────────────────────────────────────────────────────────────
     void PlaceRocks(int count)
     {
@@ -261,7 +264,7 @@ public class IslandGenerator : MonoBehaviour
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    // GRASS PATCHES
+    // GRASS PATCHES — denser tropical groundcover
     // ─────────────────────────────────────────────────────────────────────
     void PlaceGrassPatches(int count)
     {
@@ -284,11 +287,195 @@ public class IslandGenerator : MonoBehaviour
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    // SKYBOX / ATMOSPHERE
+    // ANCIENT RUINS — mossy stone pillars, broken walls, and altars
+    // ─────────────────────────────────────────────────────────────────────
+    void PlaceAncientRuins(int count)
+    {
+        for (int i = 0; i < count; i++)
+        {
+            Vector3 pos = GetRandomIslandPosition(30f, IslandRadius * 0.7f);
+            if (pos.y < WaterLevel + 1f) continue;
+
+            float ruinType = Random.value;
+
+            if (ruinType < 0.4f)
+                BuildRuinPillar(pos);
+            else if (ruinType < 0.7f)
+                BuildRuinWall(pos);
+            else
+                BuildRuinAltar(pos);
+        }
+    }
+
+    void BuildRuinPillar(Vector3 pos)
+    {
+        var pillar = new GameObject("AncientPillar");
+        pillar.transform.SetParent(IslandRoot);
+        pillar.transform.position = pos;
+
+        float height = Random.Range(2f, 5f);
+        float radius = Random.Range(0.3f, 0.6f);
+
+        // Main column
+        var col = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        col.name = "PillarColumn";
+        col.transform.SetParent(pillar.transform);
+        col.transform.localPosition = Vector3.up * height * 0.5f;
+        col.transform.localScale = new Vector3(radius, height * 0.5f, radius);
+        // Slightly tilted for "ancient ruin" feel
+        col.transform.localRotation = Quaternion.Euler(Random.Range(-8f, 8f), Random.Range(0f, 360f), Random.Range(-8f, 8f));
+
+        var colMat = new Material(GameBootstrapper.GetHDRPLitShader());
+        colMat.color = Color.Lerp(RuinStone, MossColor, Random.Range(0.1f, 0.4f));
+        col.GetComponent<Renderer>().material = colMat;
+
+        // Top capital (flat disc)
+        var cap = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        cap.name = "PillarCap";
+        cap.transform.SetParent(pillar.transform);
+        cap.transform.localPosition = Vector3.up * (height + 0.1f);
+        cap.transform.localScale = new Vector3(radius * 1.5f, 0.1f, radius * 1.5f);
+        Destroy(cap.GetComponent<Collider>());
+        cap.GetComponent<Renderer>().material = colMat;
+
+        // Moss particles
+        SpawnMossVFX(pillar.transform, height * 0.5f);
+
+        pillar.AddComponent<SnapToTerrain>();
+    }
+
+    void BuildRuinWall(Vector3 pos)
+    {
+        var wallRoot = new GameObject("AncientWall");
+        wallRoot.transform.SetParent(IslandRoot);
+        wallRoot.transform.position = pos;
+        wallRoot.transform.rotation = Quaternion.Euler(0, Random.Range(0f, 360f), 0);
+
+        float wallLen = Random.Range(3f, 7f);
+        float wallH   = Random.Range(1.5f, 3.5f);
+
+        // Main wall slab
+        var wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        wall.name = "WallBlock";
+        wall.transform.SetParent(wallRoot.transform);
+        wall.transform.localPosition = Vector3.up * wallH * 0.5f;
+        wall.transform.localScale = new Vector3(wallLen, wallH, 0.5f);
+
+        var wallMat = new Material(GameBootstrapper.GetHDRPLitShader());
+        wallMat.color = Color.Lerp(RuinStone, MossColor, Random.Range(0.05f, 0.35f));
+        wall.GetComponent<Renderer>().material = wallMat;
+
+        // Broken chunks on top (jagged edge)
+        int chunks = Random.Range(2, 5);
+        for (int i = 0; i < chunks; i++)
+        {
+            var chunk = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            chunk.name = "WallChunk";
+            chunk.transform.SetParent(wallRoot.transform);
+            float cx = Random.Range(-wallLen * 0.4f, wallLen * 0.4f);
+            float ch = Random.Range(0.3f, 1.0f);
+            chunk.transform.localPosition = new Vector3(cx, wallH + ch * 0.5f, 0);
+            chunk.transform.localScale = new Vector3(Random.Range(0.3f, 1f), ch, 0.5f);
+            chunk.transform.localRotation = Quaternion.Euler(Random.Range(-15f, 15f), 0, Random.Range(-10f, 10f));
+            Destroy(chunk.GetComponent<Collider>());
+            chunk.GetComponent<Renderer>().material = wallMat;
+        }
+
+        SpawnMossVFX(wallRoot.transform, wallH);
+
+        wallRoot.AddComponent<SnapToTerrain>();
+    }
+
+    void BuildRuinAltar(Vector3 pos)
+    {
+        var altarRoot = new GameObject("AncientAltar");
+        altarRoot.transform.SetParent(IslandRoot);
+        altarRoot.transform.position = pos;
+        altarRoot.transform.rotation = Quaternion.Euler(0, Random.Range(0f, 360f), 0);
+
+        var altarMat = new Material(GameBootstrapper.GetHDRPLitShader());
+        altarMat.color = Color.Lerp(RuinStone, MossColor, Random.Range(0.15f, 0.45f));
+
+        // Platform base (3 steps)
+        for (int step = 0; step < 3; step++)
+        {
+            float sz = 2.5f - step * 0.6f;
+            var slab = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            slab.name = "AltarStep";
+            slab.transform.SetParent(altarRoot.transform);
+            slab.transform.localPosition = Vector3.up * (step * 0.3f + 0.15f);
+            slab.transform.localScale = new Vector3(sz, 0.3f, sz);
+            slab.GetComponent<Renderer>().material = altarMat;
+            if (step > 0) Destroy(slab.GetComponent<Collider>());
+        }
+
+        // Central relic sphere (glowing)
+        var relic = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        relic.name = "AltarRelic";
+        relic.transform.SetParent(altarRoot.transform);
+        relic.transform.localPosition = Vector3.up * 1.2f;
+        relic.transform.localScale = Vector3.one * 0.3f;
+        Destroy(relic.GetComponent<Collider>());
+
+        var relicMat = new Material(GameBootstrapper.GetHDRPLitShader());
+        relicMat.color = GameBootstrapper.PaletteCyan;
+        GameBootstrapper.SetHDRPEmission(relicMat, GameBootstrapper.PaletteCyan, 10f);
+        relic.GetComponent<Renderer>().material = relicMat;
+
+        // Orbiting particle aura
+        var aura = new GameObject("AltarAura");
+        aura.transform.SetParent(relic.transform);
+        aura.transform.localPosition = Vector3.zero;
+        var ps   = aura.AddComponent<ParticleSystem>();
+        var main = ps.main;
+        ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+        main.loop          = true;
+        main.duration      = 3f;
+        main.startLifetime = 2f;
+        main.startSpeed    = 0.3f;
+        main.startSize     = 0.08f;
+        main.startColor    = new ParticleSystem.MinMaxGradient(GameBootstrapper.PaletteGold, GameBootstrapper.PaletteCyan);
+        main.maxParticles  = 25;
+        main.simulationSpace = ParticleSystemSimulationSpace.World;
+        var em = ps.emission;
+        em.rateOverTime = 10f;
+        var shape = ps.shape;
+        shape.shapeType = ParticleSystemShapeType.Sphere;
+        shape.radius    = 0.3f;
+        ps.Play();
+
+        altarRoot.AddComponent<SnapToTerrain>();
+    }
+
+    void SpawnMossVFX(Transform parent, float height)
+    {
+        var moss = new GameObject("MossVFX");
+        moss.transform.SetParent(parent);
+        moss.transform.localPosition = Vector3.up * height * 0.3f;
+        var ps   = moss.AddComponent<ParticleSystem>();
+        var main = ps.main;
+        ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+        main.loop          = true;
+        main.duration      = 5f;
+        main.startLifetime = 4f;
+        main.startSpeed    = 0.05f;
+        main.startSize     = new ParticleSystem.MinMaxCurve(0.05f, 0.15f);
+        main.startColor    = new ParticleSystem.MinMaxGradient(MossColor, new Color(0.3f, 0.6f, 0.2f, 0.5f));
+        main.maxParticles  = 15;
+        main.simulationSpace = ParticleSystemSimulationSpace.Local;
+        var em = ps.emission;
+        em.rateOverTime = 3f;
+        var shape = ps.shape;
+        shape.shapeType = ParticleSystemShapeType.Box;
+        shape.scale = new Vector3(1f, height * 0.5f, 1f);
+        ps.Play();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // SKYBOX / ATMOSPHERE — tropical distant islands
     // ─────────────────────────────────────────────────────────────────────
     void BuildSkybox()
     {
-        // Distant mountains (silhouettes around the ocean edge)
         int mountainCount = 12;
         for (int i = 0; i < mountainCount; i++)
         {
@@ -297,7 +484,7 @@ public class IslandGenerator : MonoBehaviour
             Vector3 pos = new Vector3(Mathf.Cos(angle) * dist, -5f, Mathf.Sin(angle) * dist);
 
             var mountain = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            mountain.name = "DistantMountain";
+            mountain.name = "DistantIsland";
             mountain.transform.SetParent(IslandRoot);
             mountain.transform.position   = pos;
             float w = Random.Range(30f, 80f);
@@ -306,9 +493,10 @@ public class IslandGenerator : MonoBehaviour
             mountain.transform.rotation   = Quaternion.Euler(0, angle * Mathf.Rad2Deg + 90f, 0);
             Destroy(mountain.GetComponent<Collider>());
 
+            // Tropical distant haze — slight green tint instead of cold blue
             var mat = new Material(GameBootstrapper.GetHDRPLitShader());
-            mat.color = new Color(0.08f, 0.12f, 0.22f);
-            GameBootstrapper.SetHDRPEmission(mat, new Color(0.03f, 0.05f, 0.10f), 0.3f);
+            mat.color = new Color(0.12f, 0.20f, 0.18f);
+            GameBootstrapper.SetHDRPEmission(mat, new Color(0.05f, 0.12f, 0.10f), 0.3f);
             mountain.GetComponent<Renderer>().material = mat;
         }
     }

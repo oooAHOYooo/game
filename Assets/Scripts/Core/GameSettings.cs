@@ -6,7 +6,7 @@ using UnityEngine;
 public static class GameSettings
 {
     // ── Camera Settings ──────────────────────────────────────────────────
-    public static Vector3 CameraOffset = new Vector3(0, 10f, -16f); // Zoomed in default
+    public static Vector3 CameraOffset = new Vector3(0.5f, 2.5f, -3.5f); // Over-the-shoulder zoomed in
     public static float CameraSmoothTime = 0.18f;
     public static float CameraBaseFOV = 50f;
     public static float CameraMaxFOV = 75f;
@@ -58,4 +58,30 @@ public static class GameSettings
     public static float EnemyShadowArcherHP = 30f;
     public static float EnemyBerserkerHP = 80f;
     public static float EnemyMiniBossHP = 150f;
+
+    // ── Impact Feedback ───────────────────────────────────────────────────
+    public static float HitStopBaseDuration = 0.04f;
+    public static float RumbleIntensityBase = 0.4f;
+    public static float RumbleDurationBase = 0.15f;
+    public static float ImpactAudioMinPitch = 0.8f;
+    public static float ImpactAudioMaxPitch = 1.2f;
+
+    // ── Combo System ──────────────────────────────────────────────────────
+    public static float ComboDecayTime = 3.0f;
+    public static int ComboTier1Threshold = 3;
+    public static float ComboTier1Multiplier = 1.5f;
+    public static int ComboTier2Threshold = 6;
+    public static float ComboTier2Multiplier = 2.0f;
+    public static int ComboTier3Threshold = 10;
+    public static float ComboTier3Multiplier = 3.0f;
+    public static int ComboWorshipThreshold = 10;
+    public static float ComboWorshipRadius = 25f;
+
+    // ── Village Fire System ───────────────────────────────────────────────
+    public static float FireSpreadInterval = 8.0f;
+    public static float FireSpreadRadius = 6.0f;
+    // Note: FireDamagePerTick replaced VillageDamagePerTick logic, 
+    // we already have VillageDamagePerTick = 5f at top, so we'll re-use it or define a precise one
+    public static float TotemHealRadius = 4.5f;
+    public static float TotemHealRate = 12f;
 }

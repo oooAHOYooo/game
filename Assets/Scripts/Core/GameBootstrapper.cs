@@ -19,6 +19,9 @@ public class GameBootstrapper : MonoBehaviour
     public static readonly Color PalettePurple       = new Color(0.55f, 0.15f, 0.90f);
     public static readonly Color PaletteGhostBlue    = new Color(0.40f, 0.70f, 1.00f, 0.45f);
 
+    [Header("Settings")]
+    public bool skipStartMenu = false;
+
     [Header("Runtime References (filled automatically)")]
     public static GameBootstrapper Instance;
 
@@ -52,6 +55,33 @@ public class GameBootstrapper : MonoBehaviour
         BuildCamera();
         BuildUI();
         BuildWaveManager();
+
+        // ─── Systems ───────────────────────────────────────────────────────
+        var systemsObj = new GameObject("Systems");
+        systemsObj.transform.SetParent(transform);
+        systemsObj.AddComponent<ImpactFeedback>();
+        systemsObj.AddComponent<DayNightCycle>();
+        systemsObj.AddComponent<ComboSystem>();
+        systemsObj.AddComponent<VillageFireSystem>();
+
+        // ─── Menus ───────────────────────────────────────────────────────
+        if (FindAnyObjectByType<PauseMenuManager>() == null)
+        {
+            var pauseObj = new GameObject("PauseMenuManager");
+            pauseObj.transform.SetParent(transform);
+            pauseObj.AddComponent<PauseMenuManager>();
+        }
+
+        if (skipStartMenu)
+        {
+            StartGame();
+        }
+        else if (FindAnyObjectByType<MenuManager>() == null)
+        {
+            var menuObj = new GameObject("MenuManager");
+            menuObj.transform.SetParent(transform);
+            menuObj.AddComponent<MenuManager>();
+        }
 
         Debug.Log("[GameBootstrapper] Open-world island constructed. Hit Play to test!");
     }
@@ -569,7 +599,8 @@ public class GameBootstrapper : MonoBehaviour
         canvas.sortingOrder = 10;
         _uiRoot.AddComponent<UnityEngine.UI.CanvasScaler>();
         _uiRoot.AddComponent<UnityEngine.UI.GraphicRaycaster>();
-        _uiRoot.AddComponent<GameHUD>();
+        var hud = _uiRoot.AddComponent<GameHUD>();
+        hud.gameObject.SetActive(false); // Hide HUD initially, StartGame() will enable it
         _uiRoot.AddComponent<RuntimeTweakUI>();
     }
 
@@ -617,9 +648,14 @@ public class GameBootstrapper : MonoBehaviour
         if (menu != null) menu.HideMenu();
         
         // Show HUD
-        var hud = FindAnyObjectByType<GameHUD>();
+        var hud = FindAnyObjectByType<GameHUD>(FindObjectsInactive.Include);
         if (hud != null) hud.gameObject.SetActive(true);
         
+        // Optional: lock cursor and reset time scale just to be safe
+        Cursor.visible = false;
+        Cursor.lockState = CursorLockMode.Locked;
+        Time.timeScale = 1f;
+
         Debug.Log("[GameBootstrapper] Game Started!");
     }
 
