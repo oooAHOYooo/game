@@ -36,8 +36,11 @@ public class IslandGenerator : MonoBehaviour
         BuildBeachRing();
         PlaceTrees(GameSettings.TreeCount + 30);          // more lush vegetation
         PlaceRocks(GameSettings.RockCount + 15);
+        PlaceBamboo(80);                                  // Bamboo Grove biome
         PlaceGrassPatches(120);                           // denser grass
         PlaceAncientRuins(18);                            // the new ancient ruins
+        PlaceHazards(15);                                 // Biome-specific hazards
+        PlacePowerUps(5);                                 // Exploration rewards
         BuildSkybox();
     }
 
@@ -88,6 +91,10 @@ public class IslandGenerator : MonoBehaviour
                 float falloff = 1f - Mathf.Clamp01(distFromCentre / (GameSettings.IslandRadius * 0.85f));
                 falloff = falloff * falloff; // smooth edges
 
+                // Biome Angle (0 to 360)
+                float angle = Mathf.Atan2(zPos, xPos) * Mathf.Rad2Deg;
+                if (angle < 0) angle += 360f;
+
                 // Multi-octave Perlin noise
                 float nx = (x / (float)res) * 4f + seed;
                 float nz = (z / (float)res) * 4f + seed;
@@ -96,11 +103,41 @@ public class IslandGenerator : MonoBehaviour
                 height += Mathf.PerlinNoise(nx * 1.0f, nz * 1.0f) * 1.0f;
                 height += Mathf.PerlinNoise(nx * 2.3f, nz * 2.3f) * 0.5f;
                 height += Mathf.PerlinNoise(nx * 5.1f, nz * 5.1f) * 0.15f;
-                height *= GameSettings.TerrainMaxHeight * falloff;
+                
+                // Biome modifiers
+                float biomeHeightMult = 1f;
+                Color biomeColor = GrassGreen;
+                
+                if (angle >= 0 && angle < 90) 
+                {
+                    // Volcanic Ridge: Higher, rockier, rougher
+                    biomeHeightMult = 1.6f;
+                    biomeColor = Color.Lerp(new Color(0.2f, 0.1f, 0.1f), RockGray, Mathf.PerlinNoise(nx * 2f, nz * 2f)); 
+                }
+                else if (angle >= 90 && angle < 180)
+                {
+                    // Bamboo Grove: Flatter, very green
+                    biomeHeightMult = 0.8f;
+                    biomeColor = Color.Lerp(GrassGreen, GrassDark, Mathf.PerlinNoise(nx * 3f, nz * 3f));
+                }
+                else if (angle >= 180 && angle < 270)
+                {
+                    // Waterfall Cliff: Steep drops
+                    biomeHeightMult = 1.3f;
+                    biomeColor = Color.Lerp(GameBootstrapper.PaletteCyan * 0.4f, RockGray, Mathf.PerlinNoise(nx * 2f, nz * 2f));
+                }
+                else
+                {
+                    // Beach: Low, sandy
+                    biomeHeightMult = 0.4f;
+                    biomeColor = Color.Lerp(SandColor, GrassGreen, Mathf.PerlinNoise(nx * 1f, nz * 1f));
+                }
+
+                height *= GameSettings.TerrainMaxHeight * falloff * biomeHeightMult;
 
                 // Flatten the village area (centre) slightly
-                float villageFlatten = Mathf.Clamp01(1f - distFromCentre / 30f);
-                height = Mathf.Lerp(height, 1.5f, villageFlatten * 0.6f);
+                float villageFlatten = Mathf.Clamp01(1f - distFromCentre / 35f);
+                height = Mathf.Lerp(height, 1.5f, villageFlatten * 0.8f);
 
                 verts[i] = new Vector3(xPos, height, zPos);
                 uvs[i]   = new Vector2(x / (float)res, z / (float)res);
@@ -108,10 +145,10 @@ public class IslandGenerator : MonoBehaviour
                 // Vertex colour for tropical terrain tinting
                 if (height < WaterLevel + 0.5f)
                     colors[i] = SandColor;        // white beach sand
-                else if (height > GameSettings.TerrainMaxHeight * 0.65f)
-                    colors[i] = Color.Lerp(RockGray, MossColor, Mathf.PerlinNoise(nx * 2f, nz * 2f) * 0.5f); // mossy rocky peaks
+                else if (villageFlatten > 0.5f)
+                    colors[i] = GrassGreen; // Village is always grassy
                 else
-                    colors[i] = Color.Lerp(GrassGreen, GrassDark, Mathf.PerlinNoise(nx * 3f, nz * 3f));
+                    colors[i] = biomeColor;
             }
         }
 
@@ -222,6 +259,13 @@ public class IslandGenerator : MonoBehaviour
             Vector3 pos = GetRandomIslandPosition(25f, IslandRadius * 0.75f);
             if (pos.y < WaterLevel + 0.5f) continue;
 
+            float angle = Mathf.Atan2(pos.z, pos.x) * Mathf.Rad2Deg;
+            if (angle < 0) angle += 360f;
+            
+            // Bias away from Volcanic and Bamboo (bamboo has its own generator)
+            if (angle >= 0 && angle <= 90 && Random.value > 0.3f) continue; 
+            if (angle >= 90 && angle <= 180 && Random.value > 0.2f) continue;
+
             BuildTree(pos);
         }
     }
@@ -249,6 +293,13 @@ public class IslandGenerator : MonoBehaviour
         {
             Vector3 pos = GetRandomIslandPosition(10f, IslandRadius * 0.8f);
             if (pos.y < WaterLevel + 0.3f) continue;
+            
+            float angle = Mathf.Atan2(pos.z, pos.x) * Mathf.Rad2Deg;
+            if (angle < 0) angle += 360f;
+            
+            // Bias away from Beach and Bamboo
+            if (angle >= 90 && angle <= 180 && Random.value > 0.3f) continue; // Less rocks in bamboo
+            if (angle >= 270 && Random.value > 0.4f) continue; // Less rocks on beach
 
             var rockObj = new GameObject("StylizedRock");
             rockObj.transform.SetParent(IslandRoot);
@@ -261,6 +312,51 @@ public class IslandGenerator : MonoBehaviour
             
             rockObj.AddComponent<SnapToTerrain>();
         }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // BAMBOO — densely packed in the Bamboo Grove biome
+    // ─────────────────────────────────────────────────────────────────────
+    void PlaceBamboo(int count)
+    {
+        for (int i = 0; i < count; i++)
+        {
+            Vector3 pos = GetRandomIslandPosition(20f, IslandRadius * 0.8f);
+            if (pos.y < WaterLevel + 0.5f) continue;
+
+            float angle = Mathf.Atan2(pos.z, pos.x) * Mathf.Rad2Deg;
+            if (angle < 0) angle += 360f;
+
+            // Only spawn bamboo in the Bamboo Grove (90 to 180 degrees)
+            // or very rarely outside it
+            if ((angle < 80 || angle > 190) && Random.value > 0.1f) continue;
+
+            BuildBamboo(pos);
+        }
+    }
+
+    void BuildBamboo(Vector3 pos)
+    {
+        var bambooObj = new GameObject("StylizedBamboo");
+        bambooObj.layer = LayerMask.NameToLayer("Environment"); // So they can be hit
+        bambooObj.transform.SetParent(IslandRoot);
+        bambooObj.transform.position = pos;
+        
+        var bp = bambooObj.AddComponent<StylizedBambooBP>();
+        bp.Height = Random.Range(6f, 12f);
+        bp.Segments = Random.Range(5, 8);
+        bp.Generate();
+        
+        // Add physics so Berserker can break it
+        var col = bambooObj.AddComponent<CapsuleCollider>();
+        col.radius = bp.Radius;
+        col.height = bp.Height;
+        col.center = new Vector3(0, bp.Height * 0.5f, 0);
+
+        var ph = bambooObj.AddComponent<PropHealth>();
+        ph.MaxHP = 20f;
+
+        bambooObj.AddComponent<SnapToTerrain>();
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -469,6 +565,103 @@ public class IslandGenerator : MonoBehaviour
         shape.shapeType = ParticleSystemShapeType.Box;
         shape.scale = new Vector3(1f, height * 0.5f, 1f);
         ps.Play();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // HAZARDS & POWER-UPS
+    // ─────────────────────────────────────────────────────────────────────
+    void PlaceHazards(int count)
+    {
+        for (int i = 0; i < count; i++)
+        {
+            Vector3 pos = GetRandomIslandPosition(15f, IslandRadius * 0.85f);
+            float angle = Mathf.Atan2(pos.z, pos.x) * Mathf.Rad2Deg;
+            if (angle < 0) angle += 360f;
+
+            if (angle >= 0 && angle < 90 && pos.y > WaterLevel + 2f)
+            {
+                // Volcanic Ridge -> Lava Puddle or Falling Rocks
+                if (Random.value > 0.5f) BuildLavaPuddle(pos);
+                else BuildFallingRockSpawner(pos);
+            }
+            else if (angle >= 180 && angle < 270)
+            {
+                // Waterfall Cliff -> Falling Rocks or Water Currents
+                if (pos.y > WaterLevel + 5f) BuildFallingRockSpawner(pos);
+                else if (pos.y < WaterLevel + 1f) BuildWaterCurrent(pos, angle);
+            }
+            else if (angle >= 270 && angle <= 360 && pos.y <= WaterLevel + 0.5f)
+            {
+                // Beach -> Water Currents (Undertow)
+                BuildWaterCurrent(pos, angle);
+            }
+        }
+    }
+
+    void BuildLavaPuddle(Vector3 pos)
+    {
+        var puddle = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        puddle.name = "Hazard_Lava";
+        puddle.transform.SetParent(IslandRoot);
+        // Flatten into a puddle
+        puddle.transform.position = pos + Vector3.up * 0.1f;
+        float radius = Random.Range(3f, 6f);
+        puddle.transform.localScale = new Vector3(radius, 0.05f, radius);
+
+        var mat = new Material(GameBootstrapper.GetHDRPLitShader());
+        mat.color = new Color(0.8f, 0.2f, 0f);
+        GameBootstrapper.SetHDRPEmission(mat, new Color(1f, 0.3f, 0f), 3f);
+        puddle.GetComponent<Renderer>().material = mat;
+
+        var col = puddle.GetComponent<Collider>();
+        col.isTrigger = true;
+        puddle.AddComponent<HazardLava>();
+    }
+
+    void BuildFallingRockSpawner(Vector3 pos)
+    {
+        var spawner = new GameObject("Hazard_FallingRocks");
+        spawner.transform.SetParent(IslandRoot);
+        spawner.transform.position = pos;
+        var hazard = spawner.AddComponent<HazardFallingRock>();
+        hazard.SpawnRadius = Random.Range(8f, 15f);
+    }
+
+    void BuildWaterCurrent(Vector3 pos, float angle)
+    {
+        var current = new GameObject("Hazard_WaterCurrent");
+        current.transform.SetParent(IslandRoot);
+        current.transform.position = pos;
+        
+        var col = current.AddComponent<BoxCollider>();
+        col.isTrigger = true;
+        col.size = new Vector3(15f, 5f, 15f);
+
+        var hazard = current.AddComponent<HazardCurrent>();
+        // Push outwards away from center
+        hazard.ForceDirection = new Vector3(Mathf.Cos(angle * Mathf.Deg2Rad), 0, Mathf.Sin(angle * Mathf.Deg2Rad));
+        hazard.ForceMagnitude = 800f; // High force for rigidbodies
+    }
+
+    void PlacePowerUps(int count)
+    {
+        for (int i = 0; i < count; i++)
+        {
+            Vector3 pos = GetRandomIslandPosition(20f, IslandRadius * 0.8f);
+            if (pos.y < WaterLevel + 0.5f) continue;
+
+            var pupObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            pupObj.name = "PowerUp";
+            pupObj.transform.SetParent(IslandRoot);
+            pupObj.transform.position = pos + Vector3.up;
+            pupObj.transform.localScale = Vector3.one * 0.6f;
+            
+            var col = pupObj.GetComponent<BoxCollider>();
+            col.isTrigger = true;
+
+            var pup = pupObj.AddComponent<PowerUp>();
+            pup.Type = Random.value > 0.5f ? PowerUpType.HealthHeart : PowerUpType.FullKi;
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────

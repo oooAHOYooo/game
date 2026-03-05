@@ -95,7 +95,27 @@ public class EnemyAI : MonoBehaviour
         else
             UpdateCircling();
 
+        // Biome interactions
+        if (EnemyType == "Brute") UpdateBruteBiome();
+
         UpdateAnimator();
+    }
+
+    void UpdateBruteBiome()
+    {
+        // Smashing through Bamboo Grove while moving
+        if (_rb.linearVelocity.magnitude > 1f)
+        {
+            Collider[] hits = Physics.OverlapSphere(transform.position + Vector3.up, 1.5f);
+            foreach (var h in hits)
+            {
+                if (h.gameObject.name.Contains("Bamboo"))
+                {
+                    var prop = h.GetComponent<PropHealth>();
+                    if (prop != null) prop.TakeDamage(50f); // Instant break
+                }
+            }
+        }
     }
 
     void UpdateAnimator()
@@ -237,24 +257,84 @@ public class EnemyAI : MonoBehaviour
     {
         if (_target == null) return;
 
-        // Slowly orbit the player
-        _circleAngle += 28f * Time.deltaTime;
-        float rad = CircleRadius;
-        Vector3 desiredPos = _target.position +
-            new Vector3(Mathf.Cos(_circleAngle * Mathf.Deg2Rad) * rad,
-                        0,
-                        Mathf.Sin(_circleAngle * Mathf.Deg2Rad) * rad);
+        // ShadowArcher biome logic -> Seek high ground (Volcanic/Cliff)
+        if (EnemyType == "ShadowArcher")
+        {
+            _circleAngle += 15f * Time.deltaTime;
+            float rad = CircleRadius + 4f; // Stay further back
+            
+            // Bias towards the highest point in the circle
+            Vector3 bestPos = _target.position;
+            float targetHeight = _target.position.y;
+            float maxFoundH = -100f;
 
-        MoveTo(desiredPos, MoveSpeed * 0.65f);
-        FaceTarget();
+            for (int i=0; i<8; i++)
+            {
+                float a = _circleAngle + (i * 45f);
+                Vector3 check = _target.position + new Vector3(Mathf.Cos(a * Mathf.Deg2Rad) * rad, 10f, Mathf.Sin(a * Mathf.Deg2Rad) * rad);
+                if (Physics.Raycast(check, Vector3.down, out RaycastHit hit, 20f))
+                {
+                    if (hit.point.y > maxFoundH)
+                    {
+                        maxFoundH = hit.point.y;
+                        bestPos = hit.point;
+                    }
+                }
+            }
+
+            MoveTo(bestPos, MoveSpeed * 0.5f);
+            FaceTarget();
+        }
+        else
+        {
+            // Normal circling
+            _circleAngle += 28f * Time.deltaTime;
+            float rad = CircleRadius;
+            Vector3 desiredPos = _target.position +
+                new Vector3(Mathf.Cos(_circleAngle * Mathf.Deg2Rad) * rad,
+                            0,
+                            Mathf.Sin(_circleAngle * Mathf.Deg2Rad) * rad);
+
+            MoveTo(desiredPos, MoveSpeed * 0.65f);
+            FaceTarget();
+        }
 
         // Occasional ranged harass
         if (_rangedTimer <= 0f && Random.value < RangedAttackChance)
         {
             _rangedTimer = RANGED_COOLDOWN;
-            if (EnemyType == "ShadowArcher")
+            if (EnemyType == "ShadowArcher" || EnemyType == "Elite") // Elite also shoots sometimes
                 StartCoroutine(FireArrow());
         }
+    }
+
+    IEnumerator FireArrow()
+    {
+        _isActing = true;
+        
+        if (_anim != null) _anim.SetInteger("AttackType", 1);
+        
+        // Brief charge effect
+        foreach (var r in GetComponentsInChildren<Renderer>())
+            GameBootstrapper.SetHDRPEmission(r.material, _base.AccentColor, 5f);
+            
+        yield return new WaitForSeconds(0.6f);
+        
+        if (_target != null)
+        {
+            Vector3 origin = transform.position + Vector3.up * 1f;
+            Vector3 dir = (_target.position + Vector3.up - origin).normalized;
+            SpawnProjectile(origin, dir, GameBootstrapper.PaletteMagenta, 15f, 25f);
+        }
+
+        yield return new WaitForSeconds(0.4f);
+        
+        if (_anim != null) _anim.SetInteger("AttackType", 0);
+        
+        foreach (var r in GetComponentsInChildren<Renderer>())
+            GameBootstrapper.SetHDRPEmission(r.material, _base.AccentColor, 1.5f);
+            
+        _isActing = false;
     }
 
     // ─────────────────────────────────────────────────────────────────────
