@@ -338,7 +338,8 @@ public class IslandGenerator : MonoBehaviour
     void BuildBamboo(Vector3 pos)
     {
         var bambooObj = new GameObject("StylizedBamboo");
-        bambooObj.layer = LayerMask.NameToLayer("Environment"); // So they can be hit
+        int envLayer = LayerMask.NameToLayer("Environment");
+        if (envLayer != -1) bambooObj.layer = envLayer;
         bambooObj.transform.SetParent(IslandRoot);
         bambooObj.transform.position = pos;
         

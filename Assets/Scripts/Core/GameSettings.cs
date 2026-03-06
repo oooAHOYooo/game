@@ -15,10 +15,10 @@ public static class GameSettings
     // ── Player Stats ─────────────────────────────────────────────────────
     public static float PlayerMaxHP = 100f;
     public static float PlayerMaxKi = 100f;
-    public static float PlayerGroundSpeed = 8f;
-    public static float PlayerAirSpeed = 14f;
+    public static float PlayerGroundSpeed = 12f;
+    public static float PlayerAirSpeed = 22f;
     public static float PlayerMaxFlightAltitude = 25f;
-    public static float PlayerDodgeForce = 20f;
+    public static float PlayerDodgeForce = 25f;
 
     // ── Combat ───────────────────────────────────────────────────────────
     public static float LaserDamagePerTick = 18f;
@@ -80,6 +80,7 @@ public static class GameSettings
     // ── Village Fire System ───────────────────────────────────────────────
     public static float FireSpreadInterval = 8.0f;
     public static float FireSpreadRadius = 6.0f;
+    public static float FireDamagePerTick = 5.0f;
     // Note: FireDamagePerTick replaced VillageDamagePerTick logic, 
     // we already have VillageDamagePerTick = 5f at top, so we'll re-use it or define a precise one
     public static float TotemHealRadius = 4.5f;

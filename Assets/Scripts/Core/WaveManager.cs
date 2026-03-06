@@ -78,6 +78,10 @@ public class WaveManager : MonoBehaviour
         var hud = FindAnyObjectByType<GameHUD>();
         if (hud != null) hud.ShowWaveBanner(waveIndex + 1);
 
+        // Nintendo-style alert for players
+        var controllers = FindObjectsByType<NinjaController>(FindObjectsSortMode.None);
+        foreach (var ctrl in controllers) GameBootstrapper.SpawnAlert(ctrl.transform);
+
         // Spawn enemies one-by-one with a tiny delay each
         for (int i = 0; i < enemyList.Count; i++)
         {
@@ -110,6 +114,50 @@ public class WaveManager : MonoBehaviour
         _engageQueue.Enqueue(eb);
         _aliveCount++;
         _waveSpawned++;
+
+        // Visual arrival effect
+        SpawnEnemyArrivalFX(spawnPos);
+    }
+
+    void SpawnEnemyArrivalFX(Vector3 pos)
+    {
+        var obj = new GameObject("EnemyArrivalVFX");
+        obj.transform.position = pos;
+        
+        var ps = obj.AddComponent<ParticleSystem>();
+        ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+        var main = ps.main;
+        main.duration = 1f;
+        main.loop = false;
+        main.startLifetime = 1f;
+        main.startSpeed = 20f;
+        main.startSize = 0.5f;
+        main.startColor = GameBootstrapper.PaletteCyan;
+        main.gravityModifier = -0.5f;
+
+        var em = ps.emission;
+        em.SetBursts(new[] { new ParticleSystem.Burst(0f, 100) });
+        
+        var shape = ps.shape;
+        shape.shapeType = ParticleSystemShapeType.Cone;
+        shape.angle = 15f;
+        
+        ps.Play();
+        
+        // Light pillar
+        var lightObj = new GameObject("ArrivalLight");
+        lightObj.transform.SetParent(obj.transform);
+        lightObj.transform.localPosition = Vector3.zero;
+        var l = lightObj.AddComponent<Light>();
+        l.type = LightType.Spot;
+        l.innerSpotAngle = 5f;
+        l.spotAngle = 10f;
+        l.range = 100f;
+        l.color = GameBootstrapper.PaletteCyan;
+        l.intensity = 500000f;
+        lightObj.transform.rotation = Quaternion.Euler(-90, 0, 0);
+
+        Destroy(obj, 2f);
     }
 
     /// <summary>

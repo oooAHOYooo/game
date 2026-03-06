@@ -20,6 +20,8 @@ public class EnemyAI : MonoBehaviour
     public float MoveSpeed         = 5f;
     public float AttackCooldown    = 1.6f;  // base; varies by type
     public float RangedAttackChance = 0.2f; // while circling
+    public float DodgeChance        = 0.35f;
+    public float DodgeCooldown      = 1.5f;
 
     // ── State ─────────────────────────────────────────────────────────────
     private EnemyBase   _base;
@@ -28,10 +30,12 @@ public class EnemyAI : MonoBehaviour
     private Transform   _target;          // nearest player
     private float       _attackTimer;
     private float       _rangedTimer;
+    private float       _dodgeTimer;
     private float       _circleAngle;
     private float       _speedBlend;
     private bool        _isActing;
     private const float RANGED_COOLDOWN = 3f;
+    private const float LOW_HEALTH_THRESHOLD = 0.35f;
 
     // ── Arsonist state ────────────────────────────────────────────────────
     private Village     _village;
@@ -89,6 +93,9 @@ public class EnemyAI : MonoBehaviour
 
         _attackTimer  -= Time.deltaTime;
         _rangedTimer  -= Time.deltaTime;
+        _dodgeTimer   -= Time.deltaTime;
+
+        UpdateCleverAI();
 
         if (_base.IsActiveEnemy)
             UpdateActiveEngagement();
@@ -99,6 +106,58 @@ public class EnemyAI : MonoBehaviour
         if (EnemyType == "Brute") UpdateBruteBiome();
 
         UpdateAnimator();
+    }
+
+    void UpdateCleverAI()
+    {
+        if (_target == null || _isActing) return;
+
+        float dist = Vector3.Distance(transform.position, _target.position);
+        float hpPercent = _base.CurrentHP / _base.MaxHP;
+
+        // 1. DODGING
+        if (_dodgeTimer <= 0f && dist < 4f)
+        {
+            var targetController = _target.GetComponentInParent<NinjaController>();
+            if (targetController != null && targetController.IsAttacking)
+            {
+                if (Random.value < DodgeChance)
+                    StartCoroutine(PerformDodge());
+            }
+        }
+
+        // 2. TACTICAL RETREAT / AGGRESSION
+        if (hpPercent < LOW_HEALTH_THRESHOLD)
+        {
+            CircleRadius = 8f; // Stay further back
+            MoveSpeed *= 1.1f; // Panic speed
+        }
+        else
+        {
+            CircleRadius = 5.5f;
+        }
+    }
+
+    IEnumerator PerformDodge()
+    {
+        _dodgeTimer = DodgeCooldown;
+        _isActing = true;
+
+        Vector3 sideDir = Vector3.Cross((_target.position - transform.position).normalized, Vector3.up);
+        if (Random.value < 0.5f) sideDir *= -1f;
+
+        // Dash VFX (reusing emission)
+        foreach (var r in GetComponentsInChildren<Renderer>())
+            GameBootstrapper.SetHDRPEmission(r.material, Color.white, 10f);
+
+        _rb.AddForce(sideDir * 15f, ForceMode.VelocityChange);
+        
+        yield return new WaitForSeconds(0.3f);
+
+        foreach (var r in GetComponentsInChildren<Renderer>())
+            GameBootstrapper.SetHDRPEmission(r.material, _base.AccentColor, 1.5f);
+
+        _isActing = false;
     }
 
     void UpdateBruteBiome()
@@ -197,7 +256,6 @@ public class EnemyAI : MonoBehaviour
             if (faceDir.sqrMagnitude > 0.01f)
                 transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(faceDir.normalized), 4f * Time.deltaTime);
         }
-    }
 
     void SpawnFireVFX()
     {
@@ -351,6 +409,13 @@ public class EnemyAI : MonoBehaviour
         {
             // Approach
             MoveTo(_target.position, MoveSpeed);
+
+            // Clever "Leap" attack if close enough
+            if (_attackTimer <= 0f && distToTarget < AttackRange * 2.5f && Random.value < 0.2f)
+            {
+                _attackTimer = AttackCooldown;
+                StartCoroutine(LeapAttack());
+            }
         }
         else if (_attackTimer <= 0f)
         {
@@ -364,6 +429,31 @@ public class EnemyAI : MonoBehaviour
             strafe *= (Mathf.Sin(Time.time * 2f) > 0 ? 1 : -1);
             _rb.AddForce(strafe * MoveSpeed * 0.7f, ForceMode.Acceleration);
         }
+    }
+
+    IEnumerator LeapAttack()
+    {
+        _isActing = true;
+        
+        // Wind up
+        Vector3 jumpDir = (_target.position - transform.position).normalized;
+        GameBootstrapper.SpawnAlert(transform, true); // DANGER!
+        _rb.AddForce(Vector3.up * 5f, ForceMode.VelocityChange);
+        
+        yield return new WaitForSeconds(0.2f);
+
+        // Leap!
+        _rb.AddForce(jumpDir * 15f + Vector3.up * 2f, ForceMode.VelocityChange);
+        if (_anim != null) _anim.SetInteger("AttackType", 2);
+
+        yield return new WaitForSeconds(0.4f);
+        
+        HitPlayersInRange(AttackRange * 1.5f, GetDamage() * 1.2f);
+        SpawnSlamVFX();
+
+        yield return new WaitForSeconds(0.3f);
+        if (_anim != null) _anim.SetInteger("AttackType", 0);
+        _isActing = false;
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -454,6 +544,7 @@ public class EnemyAI : MonoBehaviour
     /// </summary>
     IEnumerator MimicHeavySlam()
     {
+        GameBootstrapper.SpawnAlert(transform, true); // DANGER!
         if (_anim != null) _anim.SetInteger("AttackType", 2);
 
         // Wind-up: stand still and flash (like the player charging a heavy)
@@ -615,9 +706,25 @@ public class EnemyAI : MonoBehaviour
     {
         Vector3 dir = (dest - transform.position);
         dir.y = 0;
-        if (dir.sqrMagnitude < 0.1f) return;
-        dir.Normalize();
-        _rb.AddForce(dir * speed * 3f, ForceMode.Acceleration);
+        
+        // Social separation: avoid overlapping other enemies
+        Vector3 separation = Vector3.zero;
+        var enemies = FindObjectsByType<EnemyBase>(FindObjectsSortMode.None);
+        foreach (var e in enemies)
+        {
+            if (e == _base || !e.IsAlive) continue;
+            float d = Vector3.Distance(transform.position, e.transform.position);
+            if (d < 2.5f)
+            {
+                separation += (transform.position - e.transform.position).normalized * (2.5f - d);
+            }
+        }
+
+        if (dir.sqrMagnitude < 0.1f && separation.sqrMagnitude < 0.01f) return;
+        
+        dir = (dir.normalized + separation * 0.5f).normalized;
+        _rb.AddForce(dir * speed * 3.5f, ForceMode.Acceleration);
+        
         // Clamp velocity
         Vector3 horiz = new Vector3(_rb.linearVelocity.x, 0, _rb.linearVelocity.z);
         if (horiz.magnitude > speed)

@@ -1,6 +1,6 @@
 using UnityEngine;
 
-public enum PowerUpType { HealthHeart, FullKi }
+public enum PowerUpType { HealthHeart, FullKi, SpeedBoost, DamageBoost }
 
 /// <summary>
 /// PowerUp — Interactive collectible that restores HP or Ki for the player.
@@ -22,10 +22,20 @@ public class PowerUp : MonoBehaviour
             mat.color = new Color(1f, 0.2f, 0.3f);
             GameBootstrapper.SetHDRPEmission(mat, new Color(1f, 0.2f, 0.3f), 4f);
         }
-        else
+        else if (Type == PowerUpType.FullKi)
         {
             mat.color = GameBootstrapper.PaletteCyan;
             GameBootstrapper.SetHDRPEmission(mat, GameBootstrapper.PaletteCyan, 4f);
+        }
+        else if (Type == PowerUpType.SpeedBoost)
+        {
+            mat.color = GameBootstrapper.PaletteGold;
+            GameBootstrapper.SetHDRPEmission(mat, GameBootstrapper.PaletteGold, 6f);
+        }
+        else // DamageBoost
+        {
+            mat.color = GameBootstrapper.PaletteMagenta;
+            GameBootstrapper.SetHDRPEmission(mat, GameBootstrapper.PaletteMagenta, 6f);
         }
         
         var renderer = GetComponentInChildren<Renderer>();
@@ -48,18 +58,26 @@ public class PowerUp : MonoBehaviour
         {
             if (Type == PowerUpType.HealthHeart)
             {
-                health.TakeDamage(-HealthAmount); // Negative damage = heal
+                health.Heal(HealthAmount);
             }
             else if (Type == PowerUpType.FullKi)
             {
                 player.CurrentKi = GameSettings.PlayerMaxKi;
+            }
+            else if (Type == PowerUpType.SpeedBoost)
+            {
+                player.ApplySpeedBoost(15f, 1.6f); // 15 seconds, 1.6x speed
+            }
+            else if (Type == PowerUpType.DamageBoost)
+            {
+                player.ApplyDamageBoost(15f, 2.0f); // 15 seconds, 2x damage
             }
 
             // VFX
             if (ImpactFeedback.Instance != null)
             {
                  // Small pulse feedback
-                ImpactFeedback.Instance.Play(new DamageInfo{Amount = 10f}, transform.position);
+                ImpactFeedback.Play(new DamageInfo{Amount = 10f}, transform.position);
             }
 
             Destroy(gameObject);

@@ -8,6 +8,8 @@ using System.Collections.Generic;
 /// </summary>
 public class Village : MonoBehaviour
 {
+    public static Village Instance;
+
     // ── Config ────────────────────────────────────────────────────────────
     [Header("Village Stats")]
     public float MaxHP         = 500f;
@@ -31,6 +33,10 @@ public class Village : MonoBehaviour
     private GameObject       _totem;
     private bool             _isDestroyed = false;
 
+    // Worship Synergy Mechanic
+    public Vector3 TotemPosition => _totem != null ? _totem.transform.position : Vector3.zero;
+    public int ActiveWorshippers { get; private set; }
+
     // ─────────────────────────────────────────────────────────────────────
     public void Build(Vector3 centre)
     {
@@ -43,6 +49,11 @@ public class Village : MonoBehaviour
         BuildCampfires(centre);
         BuildFence(centre);
         SpawnVillagers(centre);
+    }
+
+    void Awake()
+    {
+        Instance = this;
     }
 
     void Update()
@@ -59,6 +70,15 @@ public class Village : MonoBehaviour
                 break;
             }
         }
+
+        // Nintendo Synergy: Track how many villagers are currently worshipping
+        // This makes Villagers an active resource, not just decoration!
+        int worshippers = 0;
+        foreach (var v in _villagers)
+        {
+            if (v.IsWorshipping) worshippers++;
+        }
+        ActiveWorshippers = worshippers;
 
         if (playerNear)
         {
@@ -370,6 +390,7 @@ public class Village : MonoBehaviour
     // ─────────────────────────────────────────────────────────────────────
     // DAMAGE
     // ─────────────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────
     public void TakeDamage(float amount)
     {
         if (_isDestroyed) return;
@@ -397,6 +418,20 @@ public class Village : MonoBehaviour
         if (_totem == null) return;
         foreach (var r in _totem.GetComponentsInChildren<Renderer>())
             GameBootstrapper.SetHDRPEmission(r.material, TotemGold, 5f);
+    }
+
+    public void Heal(float amount)
+    {
+        if (_isDestroyed) return;
+        CurrentHP = Mathf.Min(MaxHP, CurrentHP + amount);
+
+        // Flash totem cyan/gold for healing
+        if (_totem != null)
+        {
+            foreach (var r in _totem.GetComponentsInChildren<Renderer>())
+                GameBootstrapper.SetHDRPEmission(r.material, GameBootstrapper.PaletteCyan, 12f);
+            Invoke(nameof(ResetTotemGlow), 0.5f);
+        }
     }
 
     void DestroyVillage()

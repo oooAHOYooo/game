@@ -22,9 +22,10 @@ public class EnemyBase : MonoBehaviour
     [HideInInspector] public bool  IsFlying      = false;
 
     // ── References ────────────────────────────────────────────────────────
-    protected Rigidbody    _rb;
-    protected EnemyAI      _ai;
-    protected Renderer[]   _renderers;
+    protected Rigidbody       _rb;
+    protected EnemyAI         _ai;
+    protected RagdollHandler  _ragdoll;
+    protected Renderer[]      _renderers;
     private   float        _flashTimer;
     private   bool         _isFlashing;
 
@@ -43,11 +44,16 @@ public class EnemyBase : MonoBehaviour
     {
         _rb        = GetComponent<Rigidbody>();
         _ai        = GetComponent<EnemyAI>();
+        _ragdoll   = GetComponent<RagdollHandler>();
+        if (_ragdoll == null) _ragdoll = gameObject.AddComponent<RagdollHandler>();
+
         _renderers = GetComponentsInChildren<Renderer>();
         CurrentHP  = MaxHP;
 
         _rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
         _rb.linearDamping        = 3f;
+
+        _ragdoll.Setup();
     }
 
     protected virtual void Start()
@@ -159,7 +165,10 @@ public class EnemyBase : MonoBehaviour
         StartCoroutine(DamageFlash());
 
         if (CurrentHP <= 0)
-            StartCoroutine(Die());
+        {
+            Vector3 pushDir = (transform.position - attacker.position).normalized;
+            StartCoroutine(Die(pushDir * amount * 0.5f));
+        }
     }
 
     IEnumerator DamageFlash()
@@ -172,7 +181,7 @@ public class EnemyBase : MonoBehaviour
     void SetEmission(Color color, float intensity)
     {
         foreach (var r in _renderers)
-            if (r.material != null)
+            if (r != null && r.material != null)
                 GameBootstrapper.SetHDRPEmission(r.material, color, intensity);
     }
 
@@ -182,10 +191,7 @@ public class EnemyBase : MonoBehaviour
         if (_flashTimer <= 0) { _isFlashing = false; SetEmission(AccentColor, 4f); }
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // DEATH
-    // ─────────────────────────────────────────────────────────────────────
-    IEnumerator Die()
+    IEnumerator Die(Vector3 impactForce)
     {
         IsAlive = false;
         IsActiveEnemy = false;
@@ -198,47 +204,76 @@ public class EnemyBase : MonoBehaviour
         if (_heartCanvas != null)
             _heartCanvas.gameObject.SetActive(false);
 
-        // Death burst VFX
-        SpawnDeathVFX();
+        // Enable Ragdoll
+        _rb.constraints = RigidbodyConstraints.None;
+        _rb.useGravity = true;
+        _ragdoll.EnableRagdoll(true);
+        
+        // Fling into the sky (Ragdoll firework)
+        Vector3 skywardForce = Vector3.up * 40f + (impactForce.normalized + Random.insideUnitSphere).normalized * 15f;
+        _rb.AddForce(skywardForce, ForceMode.Impulse);
+        _rb.angularVelocity = Random.insideUnitSphere * 25f;
+        _ragdoll.ApplyImpact(skywardForce * 0.5f);
 
-        // Spin & shrink
-        float t = 0f;
-        while (t < 0.5f)
-        {
-            t += Time.deltaTime;
-            transform.localScale = Vector3.Lerp(Vector3.one, Vector3.zero, t / 0.5f);
-            transform.Rotate(0, 720f * Time.deltaTime, 0);
-            yield return null;
-        }
+        // Fly as a ragdoll for 1.2 seconds, then EXPLODE like a firework!
+        yield return new WaitForSeconds(1.2f);
 
+        SpawnFireworkVFX();
         Destroy(gameObject);
     }
 
-    void SpawnDeathVFX()
+    void SpawnFireworkVFX()
     {
-        var obj  = new GameObject("DeathVFX");
-        obj.transform.position = transform.position + Vector3.up;
-        var ps   = obj.AddComponent<ParticleSystem>();
+        var obj  = new GameObject("FireworkVFX");
+        // Spawn it slightly higher than their center
+        obj.transform.position = transform.position + Vector3.up; 
+
+        // Main colored explosion
+        var ps = obj.AddComponent<ParticleSystem>();
         var main = ps.main;
-        main.duration      = 0.4f;
-        main.loop          = false;
-        main.startLifetime = new ParticleSystem.MinMaxCurve(0.3f, 0.8f);
-        main.startSpeed    = new ParticleSystem.MinMaxCurve(2f, 12f);
-        main.startSize     = new ParticleSystem.MinMaxCurve(0.1f, 0.4f);
-        main.startColor    = new ParticleSystem.MinMaxGradient(AccentColor, Color.white);
-        main.maxParticles  = 80;
-        main.gravityModifier = 0.4f;
+        main.duration = 1.0f;
+        main.loop = false;
+        main.startLifetime = new ParticleSystem.MinMaxCurve(0.8f, 1.5f);
+        main.startSpeed = new ParticleSystem.MinMaxCurve(10f, 35f);
+        main.startSize = new ParticleSystem.MinMaxCurve(0.2f, 0.7f);
+        
+        // Use a mix of their accent color and gold/white for a celebratory feel
+        main.startColor = new ParticleSystem.MinMaxGradient(AccentColor, GameBootstrapper.PaletteGold);
+        main.maxParticles = 300;
+        main.gravityModifier = 0.6f;
 
         var emit = ps.emission;
-        emit.SetBursts(new[] { new ParticleSystem.Burst(0f, 80) });
+        emit.SetBursts(new[] { new ParticleSystem.Burst(0f, 200) });
         emit.rateOverTime = 0;
 
         var shape = ps.shape;
         shape.shapeType = ParticleSystemShapeType.Sphere;
-        shape.radius    = 0.5f;
+        shape.radius = 1f;
+
+        // Add trails for that beautiful firework falling effect
+        var trails = ps.trails;
+        trails.enabled = true;
+        trails.ratio = 0.5f; // 50% of particles have trails
+        trails.lifetimeMultiplier = 0.4f;
+        
+        var renderer = ps.GetComponent<ParticleSystemRenderer>();
+        renderer.trailMaterial = new Material(GameBootstrapper.GetHDRPLitShader());
+        renderer.trailMaterial.color = AccentColor;
+        GameBootstrapper.SetHDRPEmission(renderer.trailMaterial, AccentColor, 10f);
 
         ps.Play();
-        Destroy(obj, 1.5f);
+        
+        // Quick white flash to simulate the "pop" of the explosion
+        var flash = new GameObject("FireworkFlash");
+        flash.transform.position = transform.position;
+        var light = flash.AddComponent<Light>();
+        light.type = LightType.Point;
+        light.color = Color.white;
+        light.intensity = 500000f; // Brief, massive intensity for HDRP
+        light.range = 25f;
+        Destroy(flash, 0.1f);
+
+        Destroy(obj, 2.0f);
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -300,6 +335,7 @@ public class EnemyBase : MonoBehaviour
             if (anim == null) anim = root.AddComponent<Animator>();
             var animSet = AnimationLibrary.LoadAnimations();
             anim.runtimeAnimatorController = AnimatorControllerBuilder.GetOrCreateController(animSet);
+            anim.applyRootMotion = false; // Prevents "pulsing" jitter
         }
         else
         {

@@ -8,73 +8,94 @@ using UnityEngine;
 [ExecuteAlways]
 public class SplitScreenCamera : MonoBehaviour
 {
-    // ── Configuration ─────────────────────────────────────────────────────
-    [Header("Follow")]
     public Transform TargetTransform;
-    public Vector3   Offset        = new Vector3(0.85f, 1.6f, -2.8f); // Gears-style: right shoulder, chest height
-    public Vector3   LookAtOffset  = new Vector3(0.4f,  1.55f, 0f);  // Aim at upper torso / chin
-    public float     SmoothTime    = 0.12f;
 
-    [Header("Zoom")]
-    public float BaseFOV           = 55f;
-    public float MaxFOV            = 68f;   // widens slightly when sprinting / flying
-    public float FOVLerpSpeed      = 5f;
-
-    [Header("Shake")]
-    public float ShakeMagnitude    = 0.3f;
-    public float ShakeDuration     = 0.2f;
+    [Header("Smart Camera")]
+    public float     Distance      = 3.5f;
+    public float     HeightOffset  = 1.4f;
+    public float     SideOffset    = 0.6f;
+    public float     RotationSpeed = 3.5f;
 
     // ── Static shake table (indexed by player) ────────────────────────────
     private static SplitScreenCamera[] _instances = new SplitScreenCamera[2];
 
     // ── Private state ─────────────────────────────────────────────────────
     private Camera   _cam;
-    private Vector3  _velocity         = Vector3.zero;
+    private Vector3  _currentPos;
+    private float    _currentYaw       = 0f;
+    private float    _targetYaw        = 0f;
+    private float    _moveTime         = 0f;
     private float    _shakeTimer       = 0f;
     private float    _currentShakeMag  = 0f;
     private float    _shakeDuration    = 0f;
     private Vector3  _shakeOffset      = Vector3.zero;
     private int      _playerIndex      = -1;
 
-    // ─────────────────────────────────────────────────────────────────────
     void Awake()
     {
         _cam = GetComponent<Camera>();
-
-        // Register in static table by name convention
         if (gameObject.name.Contains("P1")) { _playerIndex = 0; _instances[0] = this; }
         if (gameObject.name.Contains("P2")) { _playerIndex = 1; _instances[1] = this; }
+        _currentPos = transform.position;
     }
 
     void LateUpdate()
     {
         if (TargetTransform == null) return;
-
-        FollowTarget();
+        HandleSmartFollow();
         UpdateFOV();
         ApplyShake();
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // FOLLOW
-    // ─────────────────────────────────────────────────────────────────────
-    void FollowTarget()
+    void HandleSmartFollow()
     {
-        Vector3 desiredPos = TargetTransform.position + Offset;
+        var rb = TargetTransform.GetComponent<Rigidbody>();
+        if (rb == null) return;
 
-        // Slight lean forward in direction of movement (only in Play Mode)
-        if (Application.isPlaying)
+        Vector3 horizVel = new Vector3(rb.linearVelocity.x, 0, rb.linearVelocity.z);
+        float speed = horizVel.magnitude;
+
+        // Auto-Swing Logic:
+        // If moving, slowly rotate camera to face the direction of travel
+        if (speed > 1.5f)
         {
-            var rb = TargetTransform.GetComponent<Rigidbody>();
-            if (rb != null)
+            _moveTime += Time.deltaTime;
+            if (_moveTime > 0.4f) // Only start following after a short move
             {
-                Vector3 horiz = new Vector3(rb.linearVelocity.x, 0, rb.linearVelocity.z);
-                desiredPos += horiz * 0.4f;
+                float moveYaw = Mathf.Atan2(horizVel.x, horizVel.z) * Mathf.Rad2Deg;
+                _targetYaw = Mathf.LerpAngle(_targetYaw, moveYaw, Time.deltaTime * RotationSpeed);
             }
         }
+        else
+        {
+            _moveTime = 0f;
+        }
 
-        transform.position = Vector3.SmoothDamp(transform.position, desiredPos, ref _velocity, SmoothTime);
-        transform.LookAt(TargetTransform.position + LookAtOffset);
+        _currentYaw = Mathf.LerpAngle(_currentYaw, _targetYaw, Time.deltaTime * RotationSpeed);
+
+        // Position camera behind player based on _currentYaw
+        Quaternion rotation = Quaternion.Euler(12f, _currentYaw, 0);
+        Vector3 backDir = rotation * Vector3.back;
+        Vector3 rightDir = rotation * Vector3.right;
+
+        Vector3 desiredPos = TargetTransform.position 
+                             + Vector3.up * HeightOffset 
+                             + backDir * Distance 
+                             + rightDir * SideOffset;
+
+        // Intro dive override - looking down dramatically
+        var ctrl = TargetTransform.GetComponent<NinjaController>();
+        if (ctrl != null && ctrl.IsIntroDive)
+        {
+            desiredPos = TargetTransform.position + Vector3.up * 6f + backDir * 4f;
+            transform.LookAt(TargetTransform.position + Vector3.down * 4f);
+        }
+        else
+        {
+            float smooth = Application.isPlaying ? 0.15f : 0f;
+            transform.position = Vector3.Lerp(transform.position, desiredPos, Time.deltaTime * 8f);
+            transform.LookAt(TargetTransform.position + Vector3.up * HeightOffset + (rotation * Vector3.forward * 5f));
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -94,8 +115,11 @@ public class SplitScreenCamera : MonoBehaviour
         }
 
         var nc = TargetTransform != null ? TargetTransform.GetComponent<NinjaController>() : null;
-        if (nc != null && nc.IsFiringLaser)
-            targetFOV = Mathf.Min(targetFOV + 8f, GameSettings.CameraMaxFOV + 8f); // push FOV on laser fire
+        if (nc != null)
+        {
+            if (nc.IsIntroDive) targetFOV = 85f; // Super wide sky-dive
+            else if (nc.IsFiringLaser) targetFOV = Mathf.Min(targetFOV + 8f, GameSettings.CameraMaxFOV + 8f);
+        }
 
         _cam.fieldOfView = Mathf.Lerp(_cam.fieldOfView, targetFOV, GameSettings.CameraFOVLerpSpeed * Time.deltaTime);
     }

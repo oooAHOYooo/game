@@ -56,12 +56,20 @@ public class NinjaController : MonoBehaviour
     // ── Private ───────────────────────────────────────────────────────────
     private Rigidbody   _rb;
     private Animator    _anim;
+    
+    // Procedural animation parts (if primitives are used)
+    private Transform _armL, _armR, _legL, _legR, _body;
+    private float _walkCycleTime = 0f;
+
     private Gamepad     _pad;
     private float       _dodgeTimer        = 0f;
     private float       _attackCooldown    = 0f;
     private float       _speedBlend        = 0f;
     private float       _heavyChargeTimer  = 0f;
     private bool        _heavyChargeActive = false;
+    [HideInInspector] public bool  IsIntroDive       = true;
+    [HideInInspector] public bool  IsFlipping        = false;
+
     private GameObject  _currentWeapon;
     private Transform   _lockedTarget;
     private GhostAI     _ghostAI;
@@ -91,7 +99,7 @@ public class NinjaController : MonoBehaviour
     void Awake()
     {
         _rb = GetComponent<Rigidbody>();
-        _currentWeapon = SwordRoot;
+        // We do NOT set _currentWeapon = SwordRoot here, so player starts empty
     }
 
     void Start()
@@ -107,15 +115,25 @@ public class NinjaController : MonoBehaviour
             _ghostAI.Controller = this;
         }
 
+        // Initialize Animator
+        _anim = GetComponentInChildren<Animator>();
+        if (_anim == null) _anim = gameObject.AddComponent<Animator>();
+
+        // Find primitive body parts for procedural animation
+        _body = transform.Find("Body");
+        _armL = transform.Find("ArmL");
+        _armR = transform.Find("ArmR");
+        _legL = transform.Find("LegL");
+        _legR = transform.Find("LegR");
+
+        if (SwordRoot != null) SwordRoot.SetActive(false); // Hide sword at start
+        _currentWeapon = null;
+
         // Laser beam component (manages the beam VFX + damage)
         _laser = gameObject.AddComponent<LaserBeam>();
         _laser.Controller    = this;
         _laser.BeamColor     = BodyColor;
         _laser.DamagePerTick = LaserDamagePerTick;
-
-        // Initialize Animator
-        _anim = GetComponentInChildren<Animator>();
-        if (_anim == null) _anim = gameObject.AddComponent<Animator>();
 
         var animSet = AnimationLibrary.LoadAnimations();
         _anim.runtimeAnimatorController = AnimatorControllerBuilder.GetOrCreateController(animSet);
@@ -135,7 +153,49 @@ public class NinjaController : MonoBehaviour
         HandleAttackCooldown();
         HandleGravityPowers();
         HandleWeaponRotation();
+        
+        if (IsIntroDive) HandleIntroDiveEffects();
+        
+        HandleBackflipJuice();
         UpdateAnimator();
+    }
+
+    public void ApplySpeedBoost(float duration, float multiplier)
+    {
+        StartCoroutine(SpeedBoostRoutine(duration, multiplier));
+    }
+
+    private IEnumerator SpeedBoostRoutine(float duration, float multiplier)
+    {
+        float origGround = GroundSpeed;
+        float origAir = AirSpeed;
+        GroundSpeed *= multiplier;
+        AirSpeed *= multiplier;
+        GameBootstrapper.SpawnAlert(transform, false); // Visual feedback
+
+        yield return new WaitForSeconds(duration);
+
+        GroundSpeed = origGround;
+        AirSpeed = origAir;
+    }
+
+    public void ApplyDamageBoost(float duration, float multiplier)
+    {
+        StartCoroutine(DamageBoostRoutine(duration, multiplier));
+    }
+
+    private IEnumerator DamageBoostRoutine(float duration, float multiplier)
+    {
+        float origLight = LightAttackDamage;
+        float origHeavy = HeavyAttackDamage;
+        LightAttackDamage *= multiplier;
+        HeavyAttackDamage *= multiplier;
+        GameBootstrapper.SpawnAlert(transform, true); // Visual feedback (Danger/Red)
+
+        yield return new WaitForSeconds(duration);
+
+        LightAttackDamage = origLight;
+        HeavyAttackDamage = origHeavy;
     }
 
     void UpdateAnimator()
@@ -157,6 +217,49 @@ public class NinjaController : MonoBehaviour
         _anim.SetBool("IsAttacking", IsAttacking);
         _anim.SetInteger("AttackType", IsAttacking ? LastAttackType : 0);
         _anim.SetBool("IsChargingKi", IsChargingKi);
+
+        // Procedural Animation for Primitives
+        if (_body != null && _armL != null) 
+        {
+            if (horizontalSpeed > 0.1f && IsGrounded && !IsAttacking)
+            {
+                _walkCycleTime += Time.deltaTime * (horizontalSpeed * 1.5f);
+                float swing = Mathf.Sin(_walkCycleTime) * 35f; // 35 degrees swing
+                float walkBob = Mathf.Abs(Mathf.Sin(_walkCycleTime * 2f)) * 0.15f; 
+                
+                _armL.localRotation = Quaternion.Euler(swing, 0, 0);
+                _armR.localRotation = Quaternion.Euler(-swing, 0, 0);
+                _legL.localRotation = Quaternion.Euler(-swing, 0, 0);
+                _legR.localRotation = Quaternion.Euler(swing, 0, 0);
+
+                // Body bobbing up and down
+                _body.localPosition = new Vector3(0, 1f + walkBob, 0);
+            }
+            else
+            {
+                // Reset to idle
+                _walkCycleTime = 0f;
+                _armL.localRotation = Quaternion.Lerp(_armL.localRotation, Quaternion.identity, Time.deltaTime * 10f);
+                _armR.localRotation = Quaternion.Lerp(_armR.localRotation, Quaternion.identity, Time.deltaTime * 10f);
+                _legL.localRotation = Quaternion.Lerp(_legL.localRotation, Quaternion.identity, Time.deltaTime * 10f);
+                _legR.localRotation = Quaternion.Lerp(_legR.localRotation, Quaternion.identity, Time.deltaTime * 10f);
+                _body.localPosition = Vector3.Lerp(_body.localPosition, new Vector3(0, 1f, 0), Time.deltaTime * 10f);
+            }
+
+            // Flying pose 
+            if (IsFlying && !IsGrounded)
+            {
+                _armL.localRotation = Quaternion.Lerp(_armL.localRotation, Quaternion.Euler(-160f, 0, 20f), Time.deltaTime * 8f);
+                _armR.localRotation = Quaternion.Lerp(_armR.localRotation, Quaternion.Euler(-160f, 0, -20f), Time.deltaTime * 8f);
+                _legL.localRotation = Quaternion.Lerp(_legL.localRotation, Quaternion.Euler(-20f, 0, 0), Time.deltaTime * 8f);
+                _legR.localRotation = Quaternion.Lerp(_legR.localRotation, Quaternion.Euler(-20f, 0, 0), Time.deltaTime * 8f);
+                _body.localRotation = Quaternion.Lerp(_body.localRotation, Quaternion.Euler(20f, 0, 0), Time.deltaTime * 5f);
+            }
+            else 
+            {
+                _body.localRotation = Quaternion.Lerp(_body.localRotation, Quaternion.identity, Time.deltaTime * 10f);
+            }
+        }
     }
 
     void ApplySettings()
@@ -168,9 +271,16 @@ public class NinjaController : MonoBehaviour
 
     void FixedUpdate()
     {
+        CheckGrounded();
+        
+        if (IsIntroDive)
+        {
+            HandleIntroDive();
+            return;
+        }
+
         if (IsGhost) return;
 
-        CheckGrounded();
         HandleMovement();
         HandleJumpAndFlight();
         HandleDodge();
@@ -190,82 +300,107 @@ public class NinjaController : MonoBehaviour
         _lightKickPressed = false;
         _lockOnPressed = false;
         _gravityPushPressed = false;
+        _verticalInput = 0f; // Reset vertical input for each frame
+        _heavyPunchHeld = false; // Reset held states
+        _heavyKickHeld = false;
+        _kiHeld = false;
+        _blockHeld = false;
+        _gravityPullHeld = false;
+        _weaponTransformHeld = false;
+
 
         if (IsGhost) return;
 
-        // COMBINED INPUT: Keyboard (P1) + Gamepad (by PlayerIndex)
         Vector2 compositeMove = Vector2.zero;
-        Vector2 compositeVertical = Vector2.zero;
+        _moveInput = Vector3.zero;
 
-        // 1. Keyboard (Player 1 Only) — UFC-style mapping
-        if (PlayerIndex == 0 && Keyboard.current != null)
+        // 1. Keyboard P1: LEFT SIDE (WASD + Space + J/K/L/U/I + Mouse)
+        if (PlayerIndex == 0)
         {
             var k = Keyboard.current;
-            if (k.wKey.isPressed) compositeMove.y += 1;
-            if (k.sKey.isPressed) compositeMove.y -= 1;
-            if (k.aKey.isPressed) compositeMove.x -= 1;
-            if (k.dKey.isPressed) compositeMove.x += 1;
-
-            if (k.eKey.isPressed) _verticalInput = 1f;
-            else if (k.qKey.isPressed) _verticalInput = -1f;
-            else _verticalInput = 0f;
-
-            if (k.spaceKey.wasPressedThisFrame) _jumpPressed = true;
-            if (k.leftShiftKey.wasPressedThisFrame) _dodgePressed = true;
-
-            // UFC-style attack mapping
-            if (k.jKey.wasPressedThisFrame) _lightPunchPressed = true;      // J = Light Punch
-            _heavyPunchHeld = k.kKey.isPressed;                              // K = Heavy Punch
-            if (k.uKey.wasPressedThisFrame) _lightKickPressed = true;         // U = Light Kick
-            _heavyKickHeld = k.iKey.isPressed;                               // I = Heavy Kick
-
-            _kiHeld = k.lKey.isPressed;
-            _blockHeld = k.oKey.isPressed;
-            _weaponTransformHeld = k.pKey.isPressed;
-            if (k.fKey.wasPressedThisFrame) _lockOnPressed = true;
+            var m = Mouse.current;
+            if (k != null)
+            {
+                if (k.wKey.isPressed) compositeMove.y += 1;
+                if (k.sKey.isPressed) compositeMove.y -= 1;
+                if (k.aKey.isPressed) compositeMove.x -= 1;
+                if (k.dKey.isPressed) compositeMove.x += 1;
+                if (k.eKey.isPressed) _verticalInput = 1f;
+                if (k.qKey.isPressed) _verticalInput = -1f;
+                if (k.spaceKey.wasPressedThisFrame) _jumpPressed = true;
+                if (k.leftShiftKey.wasPressedThisFrame) _dodgePressed = true;
+                if (k.jKey.wasPressedThisFrame) _lightPunchPressed = true;
+                _heavyPunchHeld = k.kKey.isPressed;
+                if (k.uKey.wasPressedThisFrame) _lightKickPressed = true;
+                _heavyKickHeld = k.iKey.isPressed;
+                _kiHeld = k.lKey.isPressed;
+                _blockHeld = k.oKey.isPressed;
+                if (k.fKey.wasPressedThisFrame) _lockOnPressed = true;
+            }
+            if (m != null)
+            {
+                if (m.leftButton.wasPressedThisFrame) _lightPunchPressed = true;
+                if (m.rightButton.isPressed) _heavyPunchHeld = true;
+            }
         }
 
-        // 2. Gamepad — UFC-style button layout
+        // 2. Keyboard P2: RIGHT SIDE (Arrows + R-Ctrl + Numpad / [ ] \ )
+        if (PlayerIndex == 1)
+        {
+            var k = Keyboard.current;
+            if (k != null)
+            {
+                if (k.upArrowKey.isPressed) compositeMove.y += 1;
+                if (k.downArrowKey.isPressed) compositeMove.y -= 1;
+                if (k.leftArrowKey.isPressed) compositeMove.x -= 1;
+                if (k.rightArrowKey.isPressed) compositeMove.x += 1;
+                
+                // Flight / Vert
+                if (k.numpad8Key.isPressed || k.rightBracketKey.isPressed) _verticalInput = 1f;
+                if (k.numpad2Key.isPressed || k.leftBracketKey.isPressed) _verticalInput = -1f;
+
+                if (k.rightCtrlKey.wasPressedThisFrame || k.numpad0Key.wasPressedThisFrame) _jumpPressed = true;
+                if (k.rightShiftKey.wasPressedThisFrame || k.numpadPeriodKey.wasPressedThisFrame) _dodgePressed = true;
+
+                // Numpad Attacks (or symbols if no numpad)
+                if (k.numpad7Key.wasPressedThisFrame || k.pKey.wasPressedThisFrame) _lightPunchPressed = true;
+                _heavyPunchHeld = k.numpad8Key.isPressed || k.backslashKey.isPressed;
+                if (k.numpad4Key.wasPressedThisFrame || k.semicolonKey.wasPressedThisFrame) _lightKickPressed = true;
+                _heavyKickHeld = k.numpad5Key.isPressed || k.quoteKey.isPressed;
+                
+                _kiHeld = k.numpadEnterKey.isPressed || k.enterKey.isPressed;
+                _blockHeld = k.numpadDivideKey.isPressed || k.slashKey.isPressed;
+            }
+        }
+
+        // 3. Gamepad — Shared
         RefreshGamepad();
         if (_pad != null)
         {
             var ls = _pad.leftStick.ReadValue();
-            var rs = _pad.rightStick.ReadValue();
-
-            // Override keyboard if stick is moved
             if (ls.sqrMagnitude > 0.1f) compositeMove = ls;
-            if (Mathf.Abs(rs.y) > 0.1f) _verticalInput = rs.y;
-
-            // Requested Mapping:
-            // South (A/Cross) = Jump
-            // West (X/Square) = Light Punch
-            // North (Y/Triangle) = Light Kick
-            // East (B/Circle) = Ki/Kai (Charge)
-            // RB (R1) = Modifier (for heavy variants)
-            // LT (L2) = Gravity Pull
-            // RT (R2) = Gravity Push
-            // D-Pad Up = Fly Up
-            // D-Pad Down = Fly Down
+            
+            // Altitude control
+            float rsY = _pad.rightStick.ReadValue().y;
+            if (Mathf.Abs(rsY) > 0.1f) _verticalInput = rsY;
+            
+            // D-Pad backup for altitude
+            if (_pad.dpad.up.isPressed) _verticalInput = 1f;
+            else if (_pad.dpad.down.isPressed) _verticalInput = -1f;
 
             if (_pad.buttonSouth.wasPressedThisFrame) _jumpPressed = true;
             
-            // Branch mapping based on RB modifier
             bool rbModifier = _pad.rightShoulder.isPressed;
-
             if (rbModifier)
             {
-                // Heavy variants with RB held
-                if (_pad.buttonWest.wasPressedThisFrame) _lightPunchPressed = true; // Use light punch as base
-                _heavyPunchHeld = _pad.buttonWest.isPressed; 
-                
+                if (_pad.buttonWest.wasPressedThisFrame) _lightPunchPressed = true;
+                _heavyPunchHeld = _pad.buttonWest.isPressed;
                 if (_pad.buttonNorth.wasPressedThisFrame) _lightKickPressed = true;
                 _heavyKickHeld = _pad.buttonNorth.isPressed;
-
-                _kiHeld = _pad.buttonEast.isPressed; // Laser instead of just charging?
+                _kiHeld = _pad.buttonEast.isPressed;
             }
             else
             {
-                // Light variants
                 if (_pad.buttonWest.wasPressedThisFrame) _lightPunchPressed = true;
                 if (_pad.buttonNorth.wasPressedThisFrame) _lightKickPressed = true;
                 _kiHeld = _pad.buttonEast.isPressed;
@@ -273,11 +408,6 @@ public class NinjaController : MonoBehaviour
 
             _gravityPullHeld = _pad.leftTrigger.ReadValue() > 0.5f;
             if (_pad.rightTrigger.wasPressedThisFrame) _gravityPushPressed = true;
-
-            // D-Pad mapping for flight
-            if (_pad.dpad.up.isPressed) _verticalInput = 1f;
-            else if (_pad.dpad.down.isPressed) _verticalInput = -1f;
-
             _blockHeld = _pad.leftShoulder.isPressed; 
             _weaponTransformHeld = _pad.rightStickButton.isPressed;
             if (_pad.leftStickButton.wasPressedThisFrame) _lockOnPressed = true;
@@ -367,10 +497,15 @@ public class NinjaController : MonoBehaviour
                 _rb.AddForce(Vector3.up * gravComp, ForceMode.Force);
             }
 
-            // Apply extra gravity for "heavy" feel if not hovering/ascending
+            // 2. JUMP HANG - Reduce gravity at the peak for better "Nintendo" feel
+            float yVel = _rb.linearVelocity.y;
+            float gravityScale = 1f;
+            if (Mathf.Abs(yVel) < 2f && !IsGrounded) gravityScale = 0.5f;
+
+            // Apply extra gravity for "heavy" feel if not hovering/ascending, but respect the hang
             if (!IsGrounded)
             {
-                _rb.AddForce(Physics.gravity * (GameSettings.GravityMultiplier - 1f), ForceMode.Acceleration);
+                _rb.AddForce(Physics.gravity * (GameSettings.GravityMultiplier * gravityScale - 1f), ForceMode.Acceleration);
             }
 
             // Landing check handled in CheckGrounded
@@ -408,6 +543,31 @@ public class NinjaController : MonoBehaviour
         float force = GameSettings.StompForce * (intensity * 0.5f);
         float radius = GameSettings.StompRadius;
 
+        // Nintendo Synergy: Totem Resonator!
+        // If the player stomps the Totem, it amplifies the blast significantly, heals the village, and calms all villagers.
+        if (Village.Instance != null && Vector3.Distance(transform.position, Village.Instance.TotemPosition) <= GameSettings.TotemHealRadius * 1.5f)
+        {
+            force *= 3f;
+            radius *= 2.5f;
+            intensity *= 2f;
+            
+            // Mega shake
+            SplitScreenCamera.ShakeCamera(PlayerIndex, 1.2f, 0.8f);
+
+            // Heal a burst of HP to the village
+            Village.Instance.Heal(100f);
+
+            // Calm panicked villagers
+            var allVillagers = FindObjectsByType<Villager>(FindObjectsSortMode.None);
+            foreach (var v in allVillagers)
+            {
+                v.CalmDown();
+                v.Celebrate(2f); // Make them cheer for the god!
+            }
+            
+            GameBootstrapper.SpawnAlert(transform, true); // Visual feedback
+        }
+
         if (VillageFireSystem.Instance != null)
             VillageFireSystem.Instance.ExtinguishFires(transform.position, radius);
 
@@ -425,6 +585,114 @@ public class NinjaController : MonoBehaviour
             var eb = h.GetComponentInParent<EnemyBase>();
             if (eb != null) eb.TakeDamage(intensity * 2f, transform);
         }
+    }
+
+    void HandleIntroDive()
+    {
+        // 1. Force extreme downward velocity for that DBZ/Skydiving feel
+        _rb.linearVelocity = new Vector3(_rb.linearVelocity.x, -60f, _rb.linearVelocity.z);
+
+        // 2. Allow slight aerial control
+        Vector3 camForward = Camera.main.transform.forward;
+        camForward.y = 0;
+        Vector3 worldDir = Camera.main.transform.right * _moveInput.x + camForward * _moveInput.z;
+        _rb.AddForce(worldDir * 40f, ForceMode.Acceleration);
+
+        // 3. BACKFLIP!
+        if (_jumpPressed && !IsFlipping)
+        {
+            StartCoroutine(PerformBackflip());
+        }
+
+        // 4. Grounding ends it
+        if (IsGrounded || transform.position.y < 1.5f)
+        {
+            IsIntroDive = false;
+            TriggerStomp(70f); // Massive landing
+            SplitScreenCamera.ShakeCamera(PlayerIndex, 1.4f, 1f);
+            SpawnSonicBoom();
+        }
+    }
+
+    void SpawnSonicBoom()
+    {
+        var boom = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        boom.name = "SonicBoom";
+        boom.transform.position = transform.position + Vector3.up * 0.1f;
+        boom.transform.localScale = new Vector3(1f, 0.05f, 1f);
+        Destroy(boom.GetComponent<Collider>());
+        
+        var mat = new Material(GameBootstrapper.GetHDRPLitShader());
+        mat.color = new Color(1, 1, 1, 0.5f);
+        GameBootstrapper.SetHDRPEmission(mat, Color.white, 8f);
+        boom.GetComponent<Renderer>().material = mat;
+
+        StartCoroutine(AnimateSonicBoom(boom));
+    }
+
+    IEnumerator AnimateSonicBoom(GameObject boom)
+    {
+        float t = 0;
+        while (t < 0.5f)
+        {
+            t += Time.deltaTime;
+            float s = t * 40f;
+            boom.transform.localScale = new Vector3(s, 0.05f, s);
+            yield return null;
+        }
+        Destroy(boom);
+    }
+
+    void HandleBackflipJuice()
+    {
+        // Occasional flip text if spinning fast
+        if (IsFlipping && Random.value < 0.05f)
+        {
+            GameBootstrapper.SpawnAlert(transform, false);
+        }
+    }
+
+    void HandleIntroDiveEffects()
+    {
+        // Wind streaks flying past the player to simulate high-speed fall
+        if (Random.value < 0.8f) // Spawn very frequently
+        {
+            var spark = new GameObject("WindStreak");
+            spark.transform.position = transform.position + Random.insideUnitSphere * 1.5f + Vector3.down * 1f;
+            spark.transform.rotation = Quaternion.Euler(-90, 0, 0); // Point straight UP so particles fly past
+
+            var ps = spark.AddComponent<ParticleSystem>();
+            var main = ps.main;
+            main.startColor = new Color(1f, 1f, 1f, 0.4f); // Semi-transparent white
+            main.startSize = Random.Range(0.02f, 0.08f);
+            main.startLifetime = 0.4f;
+            main.startSpeed = Random.Range(40f, 90f); // VERY fast
+            main.maxParticles = 5;
+
+            var renderer = spark.GetComponent<ParticleSystemRenderer>();
+            renderer.renderMode = ParticleSystemRenderMode.Stretch;
+            renderer.lengthScale = 15f; // Extremely long stretched streaks
+            renderer.velocityScale = 0.05f;
+
+            ps.Play();
+            Destroy(spark, 0.5f);
+        }
+    }
+
+    IEnumerator PerformBackflip()
+    {
+        IsFlipping = true;
+        float elapsed = 0f;
+        float duration = 0.28f; // very snappy flip
+        
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            transform.Rotate(Vector3.right, 360f * (Time.deltaTime / duration));
+            yield return null;
+        }
+        
+        IsFlipping = false;
     }
 
     void SpawnStompVFX()
@@ -653,7 +921,16 @@ public class NinjaController : MonoBehaviour
             }
             // Regen
             float comboMulti = ComboSystem.Instance != null ? ComboSystem.Instance.GetMultiplier(PlayerIndex) : 1f;
-            CurrentKi = Mathf.Min(GameSettings.PlayerMaxKi, CurrentKi + GameSettings.KiRechargeRate * comboMulti * Time.deltaTime);
+
+            // Nintendo Synergy: Worshipper Power!
+            // If the player is near the Totem, each active worshipper provides a 10% boost to Ki recharge speed.
+            float worshipMultiplier = 1f;
+            if (Village.Instance != null && Vector3.Distance(transform.position, Village.Instance.TotemPosition) <= GameSettings.TotemHealRadius * 2f)
+            {
+                worshipMultiplier += Village.Instance.ActiveWorshippers * 0.1f;
+            }
+
+            CurrentKi = Mathf.Min(GameSettings.PlayerMaxKi, CurrentKi + GameSettings.KiRechargeRate * comboMulti * worshipMultiplier * Time.deltaTime);
         }
 
         IsBlocking = _blockHeld;
@@ -765,12 +1042,17 @@ public class NinjaController : MonoBehaviour
     {
         IsAttacking = true; // lock attacks during transform
 
-        // Destroy old weapon
+        // Destroy old weapon if any
         if (_currentWeapon != null)
         {
-            // Burst particle effect
             SpawnTransformVFX(_currentWeapon.transform.position);
             Destroy(_currentWeapon);
+        }
+        else if (SwordRoot != null)
+        {
+            // If it's the first time and we just have the bootstrapper's reference
+            SpawnTransformVFX(transform.position + transform.forward);
+            SwordRoot.SetActive(false); 
         }
 
         IsStaffMode = !IsStaffMode;
@@ -822,9 +1104,10 @@ public class NinjaController : MonoBehaviour
     {
         var vfxObj = new GameObject("TransformVFX");
         vfxObj.transform.position = position;
-        var ps   = vfxObj.AddComponent<ParticleSystem>();
+        var ps = vfxObj.AddComponent<ParticleSystem>();
+        ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear); // Ensure it's not "playing" before config
         var main = ps.main;
-        main.duration     = 0.4f;
+        main.duration = 1f;
         main.loop         = false;
         main.startLifetime = new ParticleSystem.MinMaxCurve(0.3f, 0.6f);
         main.startSpeed   = new ParticleSystem.MinMaxCurve(4f, 10f);

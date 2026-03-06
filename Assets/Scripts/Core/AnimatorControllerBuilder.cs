@@ -18,10 +18,10 @@ public class AnimatorControllerBuilder
     /// </summary>
     public static AnimatorController CreateController(AnimationLibrary.AnimationSet animSet, string controllerPath)
     {
-        // If controller already exists, return it
-        var existing = UnityEditor.AssetDatabase.LoadAssetAtPath<AnimatorController>(controllerPath);
-        if (existing != null)
-            return existing;
+        // If controller already exists, return it (Commented out to allow rebuilding with new logic)
+        // var existing = UnityEditor.AssetDatabase.LoadAssetAtPath<AnimatorController>(controllerPath);
+        // if (existing != null)
+        //     return existing;
 
         // Create new controller
         var controller = AnimatorController.CreateAnimatorControllerAtPath(controllerPath);
@@ -50,18 +50,18 @@ public class AnimatorControllerBuilder
         var heavyKickState = rootStateMachine.AddState("Attack Heavy Kick");
         var chargeState = rootStateMachine.AddState("Charge");
 
-        // Assign animation clips
-        if (animSet.Idle) idleState.motion = animSet.Idle;
-        if (animSet.Run) runState.motion = animSet.Run;
-        if (animSet.Sprint) sprintState.motion = animSet.Sprint;
-        if (animSet.Jump) jumpState.motion = animSet.Jump;
-        if (animSet.Fall) fallState.motion = animSet.Fall;
-        if (animSet.Land) landState.motion = animSet.Land;
-        if (animSet.LightPunch) lightPunchState.motion = animSet.LightPunch;
-        if (animSet.HeavyPunch) heavyPunchState.motion = animSet.HeavyPunch;
-        if (animSet.LightKick) lightKickState.motion = animSet.LightKick;
-        if (animSet.HeavyKick) heavyKickState.motion = animSet.HeavyKick;
-        if (animSet.ChargeAttack) chargeState.motion = animSet.ChargeAttack;
+        // Assign animation clips and ensure they loop if they are locomotion
+        if (animSet.Idle) { SetLoop(animSet.Idle, true); idleState.motion = animSet.Idle; }
+        if (animSet.Run) { SetLoop(animSet.Run, true); runState.motion = animSet.Run; }
+        if (animSet.Sprint) { SetLoop(animSet.Sprint, true); sprintState.motion = animSet.Sprint; }
+        if (animSet.Jump) { SetLoop(animSet.Jump, false); jumpState.motion = animSet.Jump; }
+        if (animSet.Fall) { SetLoop(animSet.Fall, true); fallState.motion = animSet.Fall; }
+        if (animSet.Land) { SetLoop(animSet.Land, false); landState.motion = animSet.Land; }
+        if (animSet.LightPunch) { SetLoop(animSet.LightPunch, false); lightPunchState.motion = animSet.LightPunch; }
+        if (animSet.HeavyPunch) { SetLoop(animSet.HeavyPunch, false); heavyPunchState.motion = animSet.HeavyPunch; }
+        if (animSet.LightKick) { SetLoop(animSet.LightKick, false); lightKickState.motion = animSet.LightKick; }
+        if (animSet.HeavyKick) { SetLoop(animSet.HeavyKick, false); heavyKickState.motion = animSet.HeavyKick; }
+        if (animSet.ChargeAttack) { SetLoop(animSet.ChargeAttack, true); chargeState.motion = animSet.ChargeAttack; }
 
         // Set default state
         rootStateMachine.defaultState = idleState;
@@ -70,20 +70,26 @@ public class AnimatorControllerBuilder
         var anyToLightPunch = rootStateMachine.AddAnyStateTransition(lightPunchState);
         anyToLightPunch.AddCondition(AnimatorConditionMode.If, 0, "IsAttacking");
         anyToLightPunch.AddCondition(AnimatorConditionMode.Equals, 1, "AttackType");
+        anyToLightPunch.canTransitionToSelf = false;
 
         var anyToHeavyPunch = rootStateMachine.AddAnyStateTransition(heavyPunchState);
         anyToHeavyPunch.AddCondition(AnimatorConditionMode.If, 0, "IsAttacking");
         anyToHeavyPunch.AddCondition(AnimatorConditionMode.Equals, 2, "AttackType");
+        anyToHeavyPunch.canTransitionToSelf = false;
 
         var anyToLightKick = rootStateMachine.AddAnyStateTransition(lightKickState);
         anyToLightKick.AddCondition(AnimatorConditionMode.If, 0, "IsAttacking");
         anyToLightKick.AddCondition(AnimatorConditionMode.Equals, 3, "AttackType");
+        anyToLightKick.canTransitionToSelf = false;
 
         var anyToHeavyKick = rootStateMachine.AddAnyStateTransition(heavyKickState);
         anyToHeavyKick.AddCondition(AnimatorConditionMode.If, 0, "IsAttacking");
         anyToHeavyKick.AddCondition(AnimatorConditionMode.Equals, 4, "AttackType");
+        anyToHeavyKick.canTransitionToSelf = false;
 
-        rootStateMachine.AddAnyStateTransition(chargeState).AddCondition(AnimatorConditionMode.If, 0, "IsChargingKi");
+        var anyToCharge = rootStateMachine.AddAnyStateTransition(chargeState);
+        anyToCharge.AddCondition(AnimatorConditionMode.If, 0, "IsChargingKi");
+        anyToCharge.canTransitionToSelf = false;
 
         // Locomotion transitions
         var idleToRun = idleState.AddTransition(runState);
@@ -110,6 +116,7 @@ public class AnimatorControllerBuilder
         var anyToFall = rootStateMachine.AddAnyStateTransition(fallState);
         anyToFall.AddCondition(AnimatorConditionMode.If, 0, "IsFlying");
         anyToFall.exitTime = 0.1f;
+        anyToFall.canTransitionToSelf = false;
 
         var fallToLand = fallState.AddTransition(landState);
         fallToLand.AddCondition(AnimatorConditionMode.If, 0, "IsFlying");  // When flying becomes false
@@ -148,6 +155,19 @@ public class AnimatorControllerBuilder
 
         Debug.Log($"Created Animator Controller at {controllerPath}");
         return controller;
+    }
+
+    private static void SetLoop(AnimationClip clip, bool loop)
+    {
+        if (clip == null)
+        {
+            Debug.LogWarning("Attempted to set loop time on a null AnimationClip!");
+            return;
+        }
+        var settings = UnityEditor.AnimationUtility.GetAnimationClipSettings(clip);
+        settings.loopTime = loop;
+        UnityEditor.AnimationUtility.SetAnimationClipSettings(clip, settings);
+        UnityEditor.EditorUtility.SetDirty(clip);
     }
     #endif
 

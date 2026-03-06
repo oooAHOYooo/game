@@ -84,7 +84,7 @@ public class ComboSystem : MonoBehaviour
         {
             if (Vector3.Distance(v.transform.position, playerPos) < GameSettings.ComboWorshipRadius)
             {
-                v.Celebrate(); // Existing method in Villager
+                v.Celebrate(1.5f); // Existing method in Villager
             }
         }
     }

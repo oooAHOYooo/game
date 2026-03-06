@@ -74,35 +74,41 @@ public class PauseMenuManager : MonoBehaviour
         ovRT.offsetMin = ovRT.offsetMax = Vector2.zero;
 
         // ─── Title ───────────────────────────────────────────────────────
-        var titleText = CreateLabel(overlay, "PAUSED", new Vector2(0, 200), 48, GameBootstrapper.PaletteGold);
+        var titleText = CreateLabel(overlay, "PAUSED", new Vector2(0, 300), 80, GameBootstrapper.PaletteGold);
         titleText.alignment = TextAnchor.MiddleCenter;
 
         // ─── Controls Info ───────────────────────────────────────────────
-        var controlsText = CreateLabel(overlay, 
-            "Controls Reference:\n" +
-            "Move: WASD / Left Stick\n" +
-            "Jump / Ascend: Space / A (Cross)\n" +
-            "Attacks: J, K, U, I / X, Y, RB\n" +
-            "Dodge: Shift / B (Circle)\n" +
-            "Transform Weapon: P / R3 (Right Stick Click)\n" +
-            "Gravity Powers: LT/RT / L2/R2", 
-            new Vector2(-300, 0), 16, GameBootstrapper.PaletteCyan);
+        string controls = "CONTROLS REFERENCE\n\n" +
+                          "<color=#FFC819>PLAYER 1 (Keyboard Left)</color>\n" +
+                          "Move: WASD   |   Jump/Fly: Space\n" +
+                          "Dodge: L-Shift   |   Light Punch: J   |   Heavy Punch: K\n" +
+                          "Light Kick: U    |   Heavy Kick: I    |   Ki Charge: L\n\n" +
+                          "<color=#1AE5FF>PLAYER 2 (Keyboard Right)</color>\n" +
+                          "Move: Arrows |   Jump/Fly: R-Ctrl\n" +
+                          "Dodge: R-Shift   |   Light Punch: P   |   Heavy Punch: \\\n" +
+                          "Light Kick: ;    |   Heavy Kick: '    |   Ki Charge: Enter\n\n" +
+                          "<color=#AAAAAA>GAMEPAD (Any)</color>\n" +
+                          "Move: Left Stick | Jump: South Btn | Dodge: East Btn\n" +
+                          "Attacks: West/North Btns | Ki: R-Bumper";
+
+        var controlsText = CreateLabel(overlay, controls, new Vector2(-250, -50), 32, Color.white);
         controlsText.alignment = TextAnchor.MiddleLeft;
+        controlsText.supportRichText = true;
 
         // ─── Button Container ────────────────────────────────────────────
         var btnGroup = new GameObject("ButtonGroup");
         btnGroup.transform.SetParent(overlay.transform, false);
         var bgRT = btnGroup.AddComponent<RectTransform>();
-        bgRT.anchorMin = new Vector2(0.7f, 0.5f);
-        bgRT.anchorMax = new Vector2(0.7f, 0.5f);
-        bgRT.anchoredPosition = new Vector2(0, 0);
-        bgRT.sizeDelta = new Vector2(300, 250);
+        bgRT.anchorMin = new Vector2(0.75f, 0.5f);
+        bgRT.anchorMax = new Vector2(0.75f, 0.5f);
+        bgRT.anchoredPosition = new Vector2(0, -50);
+        bgRT.sizeDelta = new Vector2(400, 400);
 
         // ─── Buttons ─────────────────────────────────────────────────────
-        _resumeButton = CreateButton(btnGroup, "RESUME", new Vector2(0, 80), () => { ResumeGame(); });
-        _settingsButton = CreateButton(btnGroup, "SETTINGS", new Vector2(0, 20), () => { Debug.Log("Settings not yet implemented."); });
-        _saveButton = CreateButton(btnGroup, "SAVE GAME", new Vector2(0, -40), () => { Debug.Log("Save not yet implemented."); });
-        _exitButton = CreateButton(btnGroup, "EXIT GAME", new Vector2(0, -100), () => { QuitGame(); });
+        _resumeButton = CreateButton(btnGroup, "RESUME", new Vector2(0, 150), () => { ResumeGame(); });
+        _settingsButton = CreateButton(btnGroup, "SETTINGS", new Vector2(0, 50), () => { Debug.Log("Settings not yet implemented."); });
+        _saveButton = CreateButton(btnGroup, "SAVE GAME", new Vector2(0, -50), () => { Debug.Log("Save not yet implemented."); });
+        _exitButton = CreateButton(btnGroup, "EXIT GAME", new Vector2(0, -150), () => { QuitGame(); });
         
         // Link navigation manually to ensure controller D-Pad/Stick works reliably
         SetupNavigation(_resumeButton, _settingsButton, _exitButton);
@@ -181,7 +187,7 @@ public class PauseMenuManager : MonoBehaviour
         rt.anchorMin = new Vector2(0.5f, 0.5f);
         rt.anchorMax = new Vector2(0.5f, 0.5f);
         rt.anchoredPosition = anchoredPos;
-        rt.sizeDelta = new Vector2(800, 300);
+        rt.sizeDelta = new Vector2(1200, 800);
 
         return t;
     }
@@ -201,9 +207,9 @@ public class PauseMenuManager : MonoBehaviour
         rt.anchorMin = new Vector2(0.5f, 0.5f);
         rt.anchorMax = new Vector2(0.5f, 0.5f);
         rt.anchoredPosition = anchoredPos;
-        rt.sizeDelta = new Vector2(240, 50);
+        rt.sizeDelta = new Vector2(350, 80);
 
-        var label = CreateLabel(btnObj, text, Vector2.zero, 14, Color.white);
+        var label = CreateLabel(btnObj, text, Vector2.zero, 32, Color.white);
         label.alignment = TextAnchor.MiddleCenter;
         var lRT = label.GetComponent<RectTransform>();
         lRT.anchorMin = Vector2.zero;

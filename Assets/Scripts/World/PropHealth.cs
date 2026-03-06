@@ -21,7 +21,7 @@ public class PropHealth : MonoBehaviour
         if (ImpactFeedback.Instance != null && amount > 0)
         {
             var dmgInfo = new DamageInfo { Amount = amount, Critical = false };
-            ImpactFeedback.Instance.Play(dmgInfo, transform.position + Vector3.up);
+            ImpactFeedback.Play(dmgInfo, transform.position + Vector3.up);
         }
 
         if (_currentHP <= 0)
@@ -54,7 +54,7 @@ public class PropHealth : MonoBehaviour
         if (ImpactFeedback.Instance != null)
         {
             var audioData = new DamageInfo { Amount = 100f, Critical = true }; // Force heavy break sound
-            ImpactFeedback.Instance.Play(audioData, transform.position);
+            ImpactFeedback.Play(audioData, transform.position);
         }
 
         // 3. Destroy prop

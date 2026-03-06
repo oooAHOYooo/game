@@ -22,6 +22,9 @@ public class Villager : MonoBehaviour
     private bool      _isPanicking;
     private float     _celebrateTimer;
 
+    // Worship Synergy
+    public bool IsWorshipping => _state == VillagerState.Worshipping && !_isPanicking;
+
     // ── Colours ───────────────────────────────────────────────────────────
     static readonly Color SkinTone1 = new Color(0.55f, 0.38f, 0.22f);
     static readonly Color SkinTone2 = new Color(0.72f, 0.52f, 0.32f);
@@ -258,4 +261,11 @@ public class Villager : MonoBehaviour
     // ─────────────────────────────────────────────────────────────────────
     public void SetPanic(bool panic) => _isPanicking = panic;
     public void Celebrate(float duration) => _celebrateTimer = duration;
+
+    public void CalmDown()
+    {
+        _isPanicking = false;
+        _state = VillagerState.Wandering;
+    }
 }
+

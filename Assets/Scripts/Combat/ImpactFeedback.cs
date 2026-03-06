@@ -32,6 +32,11 @@ public class ImpactFeedback : MonoBehaviour
         Instance.StartCoroutine(Instance.PlayFeedbackRoutine(damageAmount, position, playerIndex));
     }
 
+    public static void Play(DamageInfo info, Vector3 position, int playerIndex = -1)
+    {
+        Play(info.Amount, position, playerIndex);
+    }
+
     private IEnumerator PlayFeedbackRoutine(float damageAmount, Vector3 position, int playerIndex)
     {
         float intensity = Mathf.Clamp01(damageAmount / 45f); // Scale 0-1 based on max heavy damage
@@ -59,6 +64,15 @@ public class ImpactFeedback : MonoBehaviour
 
         // 4. Particle Hit Burst
         SpawnHitVFX(position, intensity);
+
+        // 5. Cinematic "Hit Stop" Effect (Freezes time briefly on heavy hits)
+        if (intensity > 0.5f)
+        {
+            float hitStopDuration = 0.05f + 0.05f * intensity; 
+            Time.timeScale = 0.1f;
+            yield return new WaitForSecondsRealtime(hitStopDuration);
+            Time.timeScale = 1f;
+        }
 
         // Reset rumble
         yield return new WaitForSecondsRealtime(GameSettings.RumbleDurationBase + 0.1f * intensity);
@@ -104,6 +118,8 @@ public class ImpactFeedback : MonoBehaviour
         obj.transform.position = position;
         var ps = obj.AddComponent<ParticleSystem>();
         var main = ps.main;
+        main.playOnAwake = false;
+        ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
         main.duration = 0.2f;
         main.loop = false;
         main.startLifetime = new ParticleSystem.MinMaxCurve(0.1f, 0.3f);

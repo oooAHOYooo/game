@@ -73,7 +73,7 @@ public class FallingRockProjectile : MonoBehaviour
         if (ImpactFeedback.Instance != null)
         {
             var dmgInfo = new DamageInfo { Amount = Damage, Critical = true };
-            ImpactFeedback.Instance.Play(dmgInfo, transform.position);
+            ImpactFeedback.Play(dmgInfo, transform.position);
         }
 
         // Create a dust cloud
@@ -81,6 +81,8 @@ public class FallingRockProjectile : MonoBehaviour
         vfx.transform.position = transform.position;
         var ps = vfx.AddComponent<ParticleSystem>();
         var main = ps.main;
+        main.playOnAwake = false;
+        ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
         main.duration = 1f;
         main.loop = false;
         main.startLifetime = 1.5f;

@@ -18,6 +18,7 @@ public class GameBootstrapper : MonoBehaviour
     public static readonly Color PaletteCyan         = new Color(0.10f, 0.90f, 1.00f);
     public static readonly Color PalettePurple       = new Color(0.55f, 0.15f, 0.90f);
     public static readonly Color PaletteGhostBlue    = new Color(0.40f, 0.70f, 1.00f, 0.45f);
+    public static readonly Color PaletteMagenta      = new Color(1.00f, 0.00f, 1.00f);
 
     [Header("Settings")]
     public bool skipStartMenu = false;
@@ -150,8 +151,58 @@ public class GameBootstrapper : MonoBehaviour
         var colorAdjust = profile.Add<ColorAdjustments>();
         colorAdjust.saturation.Override(30f);
         colorAdjust.contrast.Override(20f);
+
+        // -- Cinematic Additions --
+        var vignette = profile.Add<Vignette>();
+        vignette.intensity.Override(0.45f);
+        vignette.smoothness.Override(0.8f);
+
+        var chromatic = profile.Add<ChromaticAberration>();
+        chromatic.intensity.Override(0.3f);
+        
+        var grain = profile.Add<FilmGrain>();
+        grain.type.Override(FilmGrainLookup.Medium1);
+        grain.intensity.Override(0.5f);
         
         vol.profile = profile;
+
+        // Add Atmospheric Ash/Embers
+        BuildAtmosphericParticles();
+    }
+
+    void BuildAtmosphericParticles()
+    {
+        var ash = new GameObject("AtmosphericAsh");
+        // Center it roughly in the sky above the island
+        ash.transform.position = new Vector3(0, 40f, 0); 
+
+        var ps = ash.AddComponent<ParticleSystem>();
+        var main = ps.main;
+        main.duration = 10f;
+        main.loop = true;
+        main.startLifetime = new ParticleSystem.MinMaxCurve(5f, 15f);
+        main.startSpeed = new ParticleSystem.MinMaxCurve(0.5f, 2f);
+        main.startSize = new ParticleSystem.MinMaxCurve(0.04f, 0.15f);
+        main.startColor = new ParticleSystem.MinMaxGradient(new Color(1f, 0.4f, 0.1f, 0.8f), new Color(0.1f, 0.1f, 0.1f, 0.5f));
+        main.simulationSpace = ParticleSystemSimulationSpace.World;
+        main.maxParticles = 1000;
+        main.gravityModifier = 0.05f;
+
+        var emission = ps.emission;
+        emission.rateOverTime = 100f;
+
+        var shape = ps.shape;
+        shape.shapeType = ParticleSystemShapeType.Box;
+        shape.scale = new Vector3(200f, 30f, 200f);
+
+        // Add some noise to make them flutter like real ash
+        var noise = ps.noise;
+        noise.enabled = true;
+        noise.strength = 1.5f;
+        noise.frequency = 0.5f;
+        noise.scrollSpeed = 0.5f;
+
+        ps.Play();
     }
 
     void CreatePointLight(Vector3 pos, Color color, float intensity, float range)
@@ -171,10 +222,8 @@ public class GameBootstrapper : MonoBehaviour
     // ─────────────────────────────────────────────────────────────────────────
     void BuildPlayers()
     {
-        // Find terrain height near village centre for spawn
-        float spawnY = 3f;
-        if (Physics.Raycast(new Vector3(-8f, 100f, 0), Vector3.down, out RaycastHit h1, 200f))
-            spawnY = h1.point.y + 0.5f;
+        // SKY DIVE INTRO - Spawning high in the air
+        float spawnY = 300f;
 
         // Player 1 – always active (god-sized ninja on the island)
         // Try animated character first, fall back to primitive if model not found
@@ -185,17 +234,15 @@ public class GameBootstrapper : MonoBehaviour
         _player1 = BuildNinja("Player1", new Vector3(-8f, spawnY, 0), PaletteGold, false, 0);
         #endif
 
-        float spawn2Y = 3f;
-        if (Physics.Raycast(new Vector3(8f, 100f, 0), Vector3.down, out RaycastHit h2, 200f))
-            spawn2Y = h2.point.y + 0.5f;
+        float spawn2Y = 300f;
 
-        // Player 2 – ghost if no second controller
-        bool hasSecondController = Gamepad.all.Count >= 2;
+        // Player 2 – ghost AI disabled by request to allow keyboard control
+        bool isGhost = false; 
         #if UNITY_EDITOR
-        _player2Ghost = TryBuildAnimatedNinja("Player2", new Vector3(8f, spawn2Y, 0), PaletteGhostBlue, !hasSecondController, 1)
-                     ?? BuildNinja("Player2", new Vector3(8f, spawn2Y, 0), PaletteGhostBlue, !hasSecondController, 1);
+        _player2Ghost = TryBuildAnimatedNinja("Player2", new Vector3(8f, spawn2Y, 0), PaletteGhostBlue, isGhost, 1)
+                     ?? BuildNinja("Player2", new Vector3(8f, spawn2Y, 0), PaletteGhostBlue, isGhost, 1);
         #else
-        _player2Ghost = BuildNinja("Player2", new Vector3(8f, spawn2Y, 0), PaletteGhostBlue, !hasSecondController, 1);
+        _player2Ghost = BuildNinja("Player2", new Vector3(8f, spawn2Y, 0), PaletteGhostBlue, isGhost, 1);
         #endif
     }
 
@@ -258,6 +305,7 @@ public class GameBootstrapper : MonoBehaviour
         // Build or load animation controller
         var controller = AnimatorControllerBuilder.CreateController(animSet, "Assets/Art/Animator/PlayerController.controller");
         animator.runtimeAnimatorController = controller;
+        animator.applyRootMotion = false; // Prevents "pulsing" jitter
 
         // Add physics
         var rb = root.GetComponent<Rigidbody>();
@@ -280,13 +328,23 @@ public class GameBootstrapper : MonoBehaviour
         ctrl.IsGhost = isGhost;
         ctrl.BodyColor = bodyColor;
 
-        // Add weapon holder
+        // Add weapon holder (try to find right hand bone for animations)
+        Transform hand = null;
+        var allTransforms = root.GetComponentsInChildren<Transform>();
+        foreach(var t in allTransforms) {
+            if (t.name.ToLower().Contains("righthand") || t.name.ToLower().Contains("hand.r")) {
+                hand = t;
+                break;
+            }
+        }
+
         var weaponHolder = root.transform.Find("WeaponHolder");
         if (weaponHolder == null)
         {
             weaponHolder = new GameObject("WeaponHolder").transform;
-            weaponHolder.SetParent(root.transform);
-            weaponHolder.localPosition = new Vector3(0.5f, 1.2f, 0);
+            weaponHolder.SetParent(hand != null ? hand : root.transform);
+            weaponHolder.localPosition = hand != null ? Vector3.zero : new Vector3(0.5f, 1.2f, 0);
+            weaponHolder.localRotation = Quaternion.Euler(90, 0, 0); // Point sword 'forward' relative to palm
         }
         ctrl.WeaponHolder = weaponHolder;
 
@@ -299,8 +357,8 @@ public class GameBootstrapper : MonoBehaviour
         var health = root.AddComponent<PlayerHealth>();
         health.PlayerIndex = playerIndex;
 
-        // Aura VFX
-        BuildAuraVFX(root.transform, bodyColor, isGhost);
+        // Aura VFX – Removed as per user request
+        // BuildAuraVFX(root.transform, bodyColor, isGhost);
 
         Debug.Log($"[GameBootstrapper] Built animated ninja {playerName} with Mannequin model");
         return root;
@@ -406,7 +464,7 @@ public class GameBootstrapper : MonoBehaviour
         health.PlayerIndex = playerIndex;
 
         // ── Aura VFX (particle system) ──
-        BuildAuraVFX(root.transform, bodyColor, isGhost);
+        // BuildAuraVFX(root.transform, bodyColor, isGhost);
 
         return root;
     }
@@ -466,8 +524,8 @@ public class GameBootstrapper : MonoBehaviour
             var blade = GameObject.CreatePrimitive(PrimitiveType.Cube);
             blade.name = "Blade";
             blade.transform.SetParent(root.transform);
-            blade.transform.localPosition = new Vector3(0, 0.55f, 0);
-            blade.transform.localScale    = new Vector3(0.05f, 0.7f, 0.008f);
+            blade.transform.localPosition = new Vector3(0, 0.5f, 0);
+            blade.transform.localScale    = new Vector3(0.045f, 0.63f, 0.0072f);
             if (Application.isPlaying) Destroy(blade.GetComponent<Collider>()); else DestroyImmediate(blade.GetComponent<Collider>());
             var bladeMat = new Material(GetHDRPLitShader());
             bladeMat.color = new Color(0.85f, 0.92f, 1.00f);
@@ -570,7 +628,9 @@ public class GameBootstrapper : MonoBehaviour
         cam1Obj.transform.LookAt(Vector3.zero);
         var camCtrl1 = cam1Obj.AddComponent<SplitScreenCamera>();
         camCtrl1.TargetTransform = _player1 != null ? _player1.transform : null;
-        camCtrl1.Offset          = GameSettings.CameraOffset;  // zoomed in by default
+        camCtrl1.Distance        = -GameSettings.CameraOffset.z;
+        camCtrl1.HeightOffset    = GameSettings.CameraOffset.y;
+        camCtrl1.SideOffset      = GameSettings.CameraOffset.x;
         cam1Obj.AddComponent<HDAdditionalCameraData>();
         cam1.farClipPlane = 600f;  // see the whole island
 
@@ -583,7 +643,9 @@ public class GameBootstrapper : MonoBehaviour
         cam2Obj.transform.LookAt(Vector3.zero);
         var camCtrl2 = cam2Obj.AddComponent<SplitScreenCamera>();
         camCtrl2.TargetTransform = _player2Ghost != null ? _player2Ghost.transform : null;
-        camCtrl2.Offset          = GameSettings.CameraOffset;
+        camCtrl2.Distance        = -GameSettings.CameraOffset.z;
+        camCtrl2.HeightOffset    = GameSettings.CameraOffset.y;
+        camCtrl2.SideOffset      = GameSettings.CameraOffset.x;
         cam2Obj.AddComponent<HDAdditionalCameraData>();
         cam2.farClipPlane = 600f;
     }
@@ -641,6 +703,55 @@ public class GameBootstrapper : MonoBehaviour
         mat.SetColor("_EmissionColor", emissionColor * intensity);
     }
 
+    public static void SpawnAlert(Transform parent, bool isDanger = false)
+    {
+        var alert = new GameObject("AlertExclamation");
+        alert.transform.SetParent(parent);
+        alert.transform.localPosition = new Vector3(0, 3f, 0);
+        
+        // "!" — two spheres (top long, bottom small)
+        var top = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+        top.transform.SetParent(alert.transform);
+        top.transform.localPosition = new Vector3(0, 0.4f, 0);
+        top.transform.localScale = new Vector3(0.15f, 0.35f, 0.15f);
+        Destroy(top.GetComponent<Collider>());
+        
+        var dot = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        dot.transform.SetParent(alert.transform);
+        dot.transform.localPosition = new Vector3(0, -0.2f, 0);
+        dot.transform.localScale = new Vector3(0.18f, 0.18f, 0.18f);
+        Destroy(dot.GetComponent<Collider>());
+
+        var mat = new Material(GetHDRPLitShader());
+        Color alertColor = isDanger ? PaletteCrimson : PaletteGold;
+        mat.color = alertColor;
+        SetHDRPEmission(mat, alertColor, 15f);
+        top.GetComponent<Renderer>().sharedMaterial = mat;
+        dot.GetComponent<Renderer>().sharedMaterial = mat;
+
+        // Animated "pop"
+        alert.transform.localScale = Vector3.zero;
+        if (Instance != null) Instance.StartCoroutine(AnimateAlert(alert));
+    }
+
+    private static System.Collections.IEnumerator AnimateAlert(GameObject obj)
+    {
+        float t = 0;
+        while (t < 1f) {
+            t += Time.deltaTime * 5f;
+            obj.transform.localScale = Vector3.one * Mathf.Lerp(0, 1.2f, t);
+            yield return null;
+        }
+        yield return new WaitForSeconds(1.5f);
+        t = 0;
+        while (t < 1f) {
+            t += Time.deltaTime * 5f;
+            obj.transform.localScale = Vector3.one * Mathf.Lerp(1.2f, 0, t);
+            yield return null;
+        }
+        Destroy(obj);
+    }
+
     // --- Menu Actions ---
     public void StartGame()
     {
@@ -649,7 +760,11 @@ public class GameBootstrapper : MonoBehaviour
         
         // Show HUD
         var hud = FindAnyObjectByType<GameHUD>(FindObjectsInactive.Include);
-        if (hud != null) hud.gameObject.SetActive(true);
+        if (hud != null) 
+        {
+            hud.gameObject.SetActive(true);
+            hud.ShowIntroText();
+        }
         
         // Optional: lock cursor and reset time scale just to be safe
         Cursor.visible = false;

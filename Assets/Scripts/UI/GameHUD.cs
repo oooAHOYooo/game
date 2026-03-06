@@ -391,6 +391,61 @@ public class GameHUD : MonoBehaviour
     }
 
     // ─────────────────────────────────────────────────────────────────────
+    // INTRO CINEMATIC TEXT
+    // ─────────────────────────────────────────────────────────────────────
+    public void ShowIntroText()
+    {
+        StartCoroutine(AnimateIntroText());
+    }
+
+    IEnumerator AnimateIntroText()
+    {
+        var panel = CreatePanel("IntroPanel", Vector2.zero, Vector2.one, new Color(0, 0, 0, 0));
+        var text = CreateLabel(panel, "", Vector2.zero, 48, GameBootstrapper.PaletteGold);
+        text.alignment = TextAnchor.MiddleCenter;
+        
+        // Remove background image from panel to make it just text
+        Destroy(panel.GetComponent<Image>());
+
+        string[] lines = new string[] {
+            "THE TRIBES OF THE ISLAND HAVE CALLED UPON YOU.\n\n",
+            "THE OCEAN CORRUPTION APPROACHES.\n\n",
+            "PROTECT YOUR WORSHIPPERS.\nUNLEASH YOUR KI.\n\n",
+            "BECOME THEIR GODS."
+        };
+
+        string currentText = "";
+        
+        foreach (var line in lines)
+        {
+            currentText += line;
+            text.text = currentText;
+            text.color = new Color(text.color.r, text.color.g, text.color.b, 0f);
+
+            // Fade in the whole block (quick fade)
+            for (float t = 0; t < 0.6f; t += Time.deltaTime)
+            {
+                text.color = new Color(text.color.r, text.color.g, text.color.b, t / 0.6f);
+                yield return null;
+            }
+            
+            text.color = new Color(text.color.r, text.color.g, text.color.b, 1f);
+            yield return new WaitForSeconds(1.2f);
+        }
+
+        yield return new WaitForSeconds(2.0f);
+
+        // Fade out
+        for (float t = 0; t < 1.5f; t += Time.deltaTime)
+        {
+            text.color = new Color(text.color.r, text.color.g, text.color.b, 1f - (t / 1.5f));
+            yield return null;
+        }
+
+        Destroy(panel);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
     // MOVES LIST
     // ─────────────────────────────────────────────────────────────────────
     void UpdateMovesList()
