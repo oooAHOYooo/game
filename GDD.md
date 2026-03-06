@@ -206,19 +206,47 @@ Wave 4+: 8 enemies   — Mix with MiniBoss, stats scale ×1.2 per cycle
 - When the active enemy is defeated or staggers, the next in queue steps forward  
 - This creates a fair, readable challenge that rewards skill over chaos
 
-### Enemy Types
+### Enemy Types & "Nintendo" AI Philosophy
+To achieve that signature "Nintendo polish," enemy AI relies on **highly readable, state-based behaviours** rather than complex unpredictability. 
+- **Extreme Telegraphing:** Every attack has a distinct wind-up animation and audio cue.
+- **Personality Quirks:** Enemies exhibit idle behaviours (sleeping, scratching heads) before spotting the player.
+- **Clear States:** Unaware (wandering) → Suspicious (looking) → Aggro (attacking) → Defeated (fleeing/falling).
 
-| Name | HP | Speed | Behaviour |
-|------|----|-------|-----------|
-| Foot Soldier | 40 | 5 m/s | Melee rush, basic 3-hit combo |
-| Shadow Archer | 30 | 3 m/s | Ranged energy arrows, side-steps |
-| Berserker | 80 | 6 m/s | Two-handed heavy, unblockable charged slam |
-| Wave Mini-boss | 150 | 4 m/s | All of the above, summons 1 clone |
+| Name (Archetype) | HP | Speed | Behaviour | Personality & AI State Notes |
+|------------------|----|-------|-----------|------------------------------|
+| **Foot Soldier** (Rookie) | 40 | 5 m/s | Melee rush, basic 3-hit combo. | Nervous, swings wildly, easily startled, backs down when hit. |
+| **Shadow Archer** (Skirmisher) | 30 | 3 m/s | Ranged energy arrows, side-steps. | Skittish, hyperactive, tries to stay mid-range. Backpedals when approached. |
+| **Berserker** (Bruiser) | 80 | 6 m/s | Two-handed heavy, unblockable charged slam. | Arrogant, slow, highly telegraphed attacks. Cannot be staggered during wind-up. |
+| **Wave Mini-boss** (Commander) | 150 | 4 m/s | Attacks rarely, buffs allies' speed/power, summons 1 clone. | Rigid, disciplined. Points to command others. Defeating them demoralises the squad. |
 
 ### Enemy Visual Identity
-- Dark body suit with single accent colour (crimson for soldiers, purple for archers, orange for berserkers)  
-- Glowing eyes matching accent colour  
-- Emissive energy lines along arms when attacking
+- Dark body suit with single accent colour (crimson for soldiers, purple for archers, orange for berserkers).
+- Glowing eyes matching accent colour.
+- Emissive energy lines along arms when attacking.
+- Distinct silhouettes and posture (e.g. hunched Skirmisher vs. puff-chested Bruiser) to telegraph their role instantly.
+
+### Required Animation List (Mixamo/Assets)
+*Note: Currently, no 3D humanoid animation assets (.fbx, .anim) exist in the `Assets` folder. The following list details the required animations to drive the AI State Machines once imported.*
+
+**Core Locomotion**
+- [ ] **Idle (Basic):** Nervous looking around or heavy chest-puffed breathing.
+- [ ] **Walk/Run (Basic):** Scurrying or heavy stomping walk.
+- [ ] **Walk/Run (Stealth):** Low-to-the-ground creeping (for Archers).
+
+**Combat & Attacks**
+- [ ] **Melee Wide Swing:** Heavily telegraphed 180-degree sweep (Bruiser).
+- [ ] **Overhead Smash:** Raising weapon, pausing, slamming down.
+- [ ] **Poke/Jab:** Fast forward thrust (Foot Soldier).
+- [ ] **Throw Projectile:** Lobbing/shooting motion with wind-up (Archer).
+- [ ] **Charge Wind-up:** Scraping ground/preparing to sprint.
+
+**Reactions & States**
+- [ ] **Hit Reaction (Light):** Quick flinch backward.
+- [ ] **Hit Reaction (Heavy):** Staggering off balance.
+- [ ] **Stunned/Dizzy:** Swaying, head-holding "vulnerable" state.
+- [ ] **Notice/Surprise:** Dramatic flinch when spotting player.
+- [ ] **Taunt/Command:** Pointing forward, shouting, or chest-pounding.
+- [ ] **Standard Death:** Collapsing backwards.
 
 ---
 
