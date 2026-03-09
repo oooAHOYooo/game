@@ -11,10 +11,25 @@ public class PlayerHealth : MonoBehaviour
 
     [HideInInspector] public float CurrentHP;
     [HideInInspector] public bool  IsAlive = true;
+    [HideInInspector] public bool  IsTakingDamage = false;
 
     private bool _isInvincible = false;
+    private float _damageVisualTimer = 0f;
 
-    void Start() => CurrentHP = GameSettings.PlayerMaxHP;
+    void Start() => CurrentHP = MaxHP;
+
+    void Update()
+    {
+        if (_damageVisualTimer > 0)
+        {
+            _damageVisualTimer -= Time.deltaTime;
+            IsTakingDamage = true;
+        }
+        else
+        {
+            IsTakingDamage = false;
+        }
+    }
 
     public void TakeDamage(float amount)
     {
@@ -22,12 +37,14 @@ public class PlayerHealth : MonoBehaviour
 
         CurrentHP -= amount;
         CurrentHP = Mathf.Max(0, CurrentHP);
+        _damageVisualTimer = 0.2f; // Flag hit for 200ms
 
         ImpactFeedback.Play(amount, transform.position, PlayerIndex);
 
         if (CurrentHP <= 0 && IsAlive)
             StartCoroutine(Die());
     }
+
 
     public void SetInvincible(bool value) => _isInvincible = value;
 

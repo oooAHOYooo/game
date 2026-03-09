@@ -65,6 +65,9 @@ public class GameBootstrapper : MonoBehaviour
         systemsObj.AddComponent<ComboSystem>();
         systemsObj.AddComponent<VillageFireSystem>();
 
+        BuildMythologicalObjects();
+
+
         // ─── Menus ───────────────────────────────────────────────────────
         if (FindAnyObjectByType<PauseMenuManager>() == null)
         {
@@ -107,9 +110,25 @@ public class GameBootstrapper : MonoBehaviour
         _village.Build(Vector3.zero);  // village at island centre
     }
 
+    void BuildMythologicalObjects()
+    {
+        // 1. The Divine Goal (at the heart of the village)
+        var goalObj = new GameObject("BallGoal");
+        goalObj.transform.position = new Vector3(0, 0, 0); // Village center
+        goalObj.AddComponent<BallGoal>();
+
+        // 2. The Mythological Ball (Spawns in a dramatic pedestal or just high up)
+        var ballObj = new GameObject("MythologicalBall");
+        ballObj.transform.position = new Vector3(0, 20f, 15f); // High up, so it falls in!
+        var col = ballObj.AddComponent<SphereCollider>();
+        col.radius = 0.5f;
+        ballObj.AddComponent<MythologicalBall>();
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // LIGHTING
     // ─────────────────────────────────────────────────────────────────────────
+
     void BuildLighting()
     {
         // Ambient — Dusty, red desert atmosphere
@@ -154,17 +173,18 @@ public class GameBootstrapper : MonoBehaviour
 
         // -- Cinematic Additions --
         var vignette = profile.Add<Vignette>();
-        vignette.intensity.Override(0.45f);
+        vignette.intensity.Override(0.20f);
         vignette.smoothness.Override(0.8f);
 
         var chromatic = profile.Add<ChromaticAberration>();
         chromatic.intensity.Override(0.3f);
         
         var grain = profile.Add<FilmGrain>();
-        grain.type.Override(FilmGrainLookup.Medium1);
-        grain.intensity.Override(0.5f);
+        grain.type.Override(FilmGrainLookup.Thin1);
+        grain.intensity.Override(0.15f);
         
         vol.profile = profile;
+
 
         // Add Atmospheric Ash/Embers
         BuildAtmosphericParticles();

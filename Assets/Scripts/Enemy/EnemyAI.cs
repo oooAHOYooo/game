@@ -745,6 +745,20 @@ public class EnemyAI : MonoBehaviour
 
     void FindTarget()
     {
+        // 1. BALL FOCUS: If the ball is on the ground, move to it!
+        if (MythologicalBall.Instance != null && MythologicalBall.Instance.Carrier == null)
+        {
+            _target = MythologicalBall.Instance.transform;
+            return;
+        }
+
+        // 2. CARRIER FOCUS: If someone has the ball, target them!
+        if (MythologicalBall.Instance != null && MythologicalBall.Instance.Carrier != null)
+        {
+            _target = MythologicalBall.Instance.Carrier.transform;
+            return;
+        }
+
         // Find nearest alive player
         var players = FindObjectsByType<PlayerHealth>(FindObjectsSortMode.None);
         float nearest = float.MaxValue;
@@ -757,4 +771,5 @@ public class EnemyAI : MonoBehaviour
         }
         _target = best;
     }
+
 }

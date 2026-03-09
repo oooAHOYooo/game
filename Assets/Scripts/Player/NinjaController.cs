@@ -314,27 +314,43 @@ public class NinjaController : MonoBehaviour
         Vector2 compositeMove = Vector2.zero;
         _moveInput = Vector3.zero;
 
-        // 1. Keyboard P1: LEFT SIDE (WASD + Space + J/K/L/U/I + Mouse)
+        // 1. Keyboard P1: Both WASD and Arrows (Universal controls for P1)
         if (PlayerIndex == 0)
         {
             var k = Keyboard.current;
             var m = Mouse.current;
             if (k != null)
             {
+                // WASD
                 if (k.wKey.isPressed) compositeMove.y += 1;
                 if (k.sKey.isPressed) compositeMove.y -= 1;
                 if (k.aKey.isPressed) compositeMove.x -= 1;
                 if (k.dKey.isPressed) compositeMove.x += 1;
+                
+                // ARROWS (Now also move P1)
+                if (k.upArrowKey.isPressed) compositeMove.y += 1;
+                if (k.downArrowKey.isPressed) compositeMove.y -= 1;
+                if (k.leftArrowKey.isPressed) compositeMove.x -= 1;
+                if (k.rightArrowKey.isPressed) compositeMove.x += 1;
+                
+                compositeMove.x = Mathf.Clamp(compositeMove.x, -1f, 1f);
+                compositeMove.y = Mathf.Clamp(compositeMove.y, -1f, 1f);
+
                 if (k.eKey.isPressed) _verticalInput = 1f;
                 if (k.qKey.isPressed) _verticalInput = -1f;
+                
                 if (k.spaceKey.wasPressedThisFrame) _jumpPressed = true;
-                if (k.leftShiftKey.wasPressedThisFrame) _dodgePressed = true;
-                if (k.jKey.wasPressedThisFrame) _lightPunchPressed = true;
-                _heavyPunchHeld = k.kKey.isPressed;
-                if (k.uKey.wasPressedThisFrame) _lightKickPressed = true;
-                _heavyKickHeld = k.iKey.isPressed;
-                _kiHeld = k.lKey.isPressed;
-                _blockHeld = k.oKey.isPressed;
+                if (k.leftShiftKey.wasPressedThisFrame || k.rightShiftKey.wasPressedThisFrame) _dodgePressed = true;
+                
+                if (k.jKey.wasPressedThisFrame || k.pKey.wasPressedThisFrame) _lightPunchPressed = true;
+                _heavyPunchHeld = k.kKey.isPressed || k.backslashKey.isPressed;
+                
+                if (k.uKey.wasPressedThisFrame || k.semicolonKey.wasPressedThisFrame) _lightKickPressed = true;
+                _heavyKickHeld = k.iKey.isPressed || k.quoteKey.isPressed;
+                
+                _kiHeld = k.lKey.isPressed || k.enterKey.isPressed;
+                _blockHeld = k.oKey.isPressed || k.slashKey.isPressed;
+                
                 if (k.fKey.wasPressedThisFrame) _lockOnPressed = true;
             }
             if (m != null)
@@ -343,6 +359,7 @@ public class NinjaController : MonoBehaviour
                 if (m.rightButton.isPressed) _heavyPunchHeld = true;
             }
         }
+
 
         // 2. Keyboard P2: RIGHT SIDE (Arrows + R-Ctrl + Numpad / [ ] \ )
         if (PlayerIndex == 1)

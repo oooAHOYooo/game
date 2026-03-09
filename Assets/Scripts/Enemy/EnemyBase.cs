@@ -20,6 +20,7 @@ public class EnemyBase : MonoBehaviour
     [HideInInspector] public bool  IsActiveEnemy = false;  // true = currently engaging
     [HideInInspector] public bool  IsAlive       = true;
     [HideInInspector] public bool  IsFlying      = false;
+    [HideInInspector] public bool  IsTakingDamage = false;
 
     // ── References ────────────────────────────────────────────────────────
     protected Rigidbody       _rb;
@@ -28,6 +29,7 @@ public class EnemyBase : MonoBehaviour
     protected Renderer[]      _renderers;
     private   float        _flashTimer;
     private   bool         _isFlashing;
+    private   float        _damageTakenTimer = 0f;
 
     // ── Floating Heart UI ─────────────────────────────────────────────────
     private const int   ENEMY_HEART_COUNT = 3;
@@ -63,9 +65,16 @@ public class EnemyBase : MonoBehaviour
 
     protected virtual void Update()
     {
+        if (_damageTakenTimer > 0)
+        {
+            _damageTakenTimer -= Time.deltaTime;
+        }
+        IsTakingDamage = (_damageTakenTimer > 0);
+
         if (_isFlashing) FlashTick();
         UpdateFloatingHearts();
     }
+
 
     // ─────────────────────────────────────────────────────────────────────
     // FLOATING HEART UI
@@ -158,11 +167,13 @@ public class EnemyBase : MonoBehaviour
 
         CurrentHP -= amount;
         CurrentHP = Mathf.Max(0, CurrentHP);
+        _damageTakenTimer = 0.2f;
 
         ImpactFeedback.Play(amount, transform.position);
 
         // Damage flash
         StartCoroutine(DamageFlash());
+
 
         if (CurrentHP <= 0)
         {

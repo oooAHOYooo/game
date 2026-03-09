@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Download Ninja Strike</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #ff4757;
+            --secondary: #2f3542;
+            --bg: #0a0a0c;
+            --glass: rgba(255, 255, 255, 0.05);
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Outfit', sans-serif;
+            background: var(--bg);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+            background: radial-gradient(circle at center, #1e1e26 0%, #0a0a0c 100%);
+        }
+
+        .container {
+            text-align: center;
+            background: var(--glass);
+            padding: 3rem;
+            border-radius: 24px;
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            max-width: 500px;
+            width: 90%;
+            transition: transform 0.3s ease;
+        }
+
+        .container:hover {
+            transform: translateY(-5px);
+        }
+
+        h1 {
+            font-size: 3rem;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(45deg, #ff4757, #ffa502);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        p {
+            color: #a4b0be;
+            margin-bottom: 2rem;
+            line-height: 1.6;
+        }
+
+        .btn {
+            display: inline-block;
+            background: var(--primary);
+            color: white;
+            text-decoration: none;
+            padding: 1rem 2.5rem;
+            border-radius: 12px;
+            font-weight: bold;
+            font-size: 1.1rem;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 20px rgba(255, 71, 87, 0.3);
+            cursor: pointer;
+        }
+
+        .btn:hover {
+            background: #ff6b81;
+            transform: scale(1.05);
+            box-shadow: 0 15px 30px rgba(255, 71, 87, 0.4);
+        }
+
+        .footer {
+            margin-top: 2rem;
+            font-size: 0.8rem;
+            color: #57606f;
+        }
+
+        /* Ambient animation */
+        .blob {
+            position: absolute;
+            width: 400px;
+            height: 400px;
+            background: var(--primary);
+            filter: blur(100px);
+            opacity: 0.1;
+            z-index: -1;
+            animation: move 20s infinite alternate;
+        }
+
+        @keyframes move {
+            from { transform: translate(-50%, -50%); }
+            to { transform: translate(50%, 50%); }
+        }
+    </style>
+</head>
+<body>
+    <div class="blob"></div>
+    <div class="container">
+        <h1>Ninja Strike</h1>
+        <p>A high-energy Local Co-Op action game. Download the Windows companion build and start the strike.</p>
+        
+        <!-- UPDATE THE LINK BELOW WITH YOUR GOOGLE BUCKET URL -->
+        <a href="YOUR_GOOGLE_BUCKET_URL_HERE/NinjaStrike_Windows.zip" class="btn">
+            Download for Windows 11
+        </a>
+
+        <div class="footer">
+            Instruction: Extract the ZIP and run <b>NinjaStrike.exe</b>
+        </div>
+    </div>
+</body>
+</html>

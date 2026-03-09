@@ -42,8 +42,13 @@ public class GameHUD : MonoBehaviour
     private List<Image> _villageHearts = new List<Image>();
     private Text  _villageLabel;
 
+    // Ball Score
+    private Text _ballScore;
+    private static readonly Color BallScoreColor = new Color(0.1f, 0.9f, 1.0f); // Divine Cyan
+
     // Divider line (split-screen centre)
     private Image _centreDivider;
+
 
     // Moves list (top-left)
     private Text  _movesList;
@@ -141,6 +146,14 @@ public class GameHUD : MonoBehaviour
         _villageLabel.alignment = TextAnchor.MiddleCenter;
 
         BuildHeartRow(villPanel, _villageHearts, VILLAGE_HEARTS, new Vector2(10f, -22f), VillageHeartFull, true);
+
+        // ─── Ball Score (Central Highlight) ──────────────────────────────
+        _ballScore = CreateLabel(villPanel, "SAVED: 0", new Vector2(0f, -48f), 18, BallScoreColor);
+        var bsrt = _ballScore.GetComponent<RectTransform>();
+        bsrt.anchorMin = new Vector2(0f, 0f);
+        bsrt.anchorMax = new Vector2(1f, 0.5f);
+        bsrt.offsetMin = bsrt.offsetMax = Vector2.zero;
+        _ballScore.alignment = TextAnchor.MiddleCenter;
 
         // ─── Centre divider (vertical line) ──────────────────────────────
         var dividerObj = new GameObject("CentreDivider");
@@ -250,7 +263,14 @@ public class GameHUD : MonoBehaviour
         // Village hearts
         if (_village != null)
             UpdateHearts(_villageHearts, _village.CurrentHP, _village.MaxHP, VillageHeartFull, VillageHeartFull * 0.7f, VillageHeartEmpty);
+
+        // Ball Score
+        if (_ballScore != null && BallGoal.Instance != null)
+        {
+            _ballScore.text = $"ORBS SAVED: {BallGoal.Instance.Score}";
+        }
     }
+
 
     void UpdateHearts(List<Image> hearts, float currentHP, float maxHP, Color fullColor, Color halfColor, Color emptyColor)
     {

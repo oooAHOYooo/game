@@ -60,3 +60,7 @@ open:
 	@echo "Opening Unity..."
 	@nohup "$(UNITY_EXE)" -projectPath "$(PROJECT)" &>/dev/null &
 	@echo "✔  Unity is launching in the background"
+
+# ── Build Switch ────────────────────────────────────────────
+switch:
+	powershell.exe -ExecutionPolicy Bypass -File build_switch.ps1
