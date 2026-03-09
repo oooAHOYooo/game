@@ -394,7 +394,6 @@ public class NinjaController : MonoBehaviour
                 compositeMove.x = Mathf.Clamp(compositeMove.x, -1f, 1f);
                 compositeMove.y = Mathf.Clamp(compositeMove.y, -1f, 1f);
 
-<<<<<<< HEAD
                 if (k.eKey.isPressed) _verticalInput = 1f;
                 if (k.qKey.isPressed) _verticalInput = -1f;
                 

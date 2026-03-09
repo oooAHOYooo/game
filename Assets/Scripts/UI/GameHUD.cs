@@ -334,7 +334,6 @@ public class GameHUD : MonoBehaviour
         
         float targetAlpha = isBusy ? 1f : 0.25f;
         group.alpha = Mathf.MoveTowards(group.alpha, targetAlpha, Time.deltaTime * 2f);
->>>>>>> 68e0511 (Implement Physics Combat, Nintendo-style HUD, and Totem Upgrades)
     }
 
 
