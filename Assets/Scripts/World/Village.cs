@@ -58,11 +58,18 @@ public class Village : MonoBehaviour
         if (TotemLevel > oldLevel)
         {
             // Visual feedback for level up
-            if (ImpactFeedback.Instance != null)
-                ImpactFeedback.Instance.Play(new DamageInfo{Amount = 0}, _totem.transform.position + Vector3.up * 3f);
+            ImpactFeedback.Play(new DamageInfo{Amount = 0}, _totem.transform.position + Vector3.up * 3f);
             
             // Notification VFX on totem
             StartCoroutine(TotemLevelUpVFX());
+        }
+    }
+
+    public void CelebrateAll(float duration)
+    {
+        foreach (var v in _villagers)
+        {
+            v.Celebrate(duration);
         }
     }
 

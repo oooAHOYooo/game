@@ -91,12 +91,15 @@ public class BallGoal : MonoBehaviour
         // Reward carrier
         if (ball.Carrier != null)
         {
-            var p = ball.Carrier;
-            GrantPowerUps(p);
-            
-            // Visual feedback
-            GameBootstrapper.SpawnAlert(p.transform, false);
-            SplitScreenCamera.ShakeCamera(p.PlayerIndex, 0.8f, 1.0f);
+            var p = ball.Carrier.GetComponent<NinjaController>();
+            if (p != null)
+            {
+                GrantPowerUps(p);
+                
+                // Visual feedback
+                GameBootstrapper.SpawnAlert(p.transform, false);
+                SplitScreenCamera.ShakeCamera(p.PlayerIndex, 0.8f, 1.0f);
+            }
         }
 
         // Heal Island/Village

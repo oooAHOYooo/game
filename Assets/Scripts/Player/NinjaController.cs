@@ -65,8 +65,6 @@ public class NinjaController : MonoBehaviour
     private float       _dodgeTimer        = 0f;
     private float       _attackCooldown    = 0f;
     private float       _speedBlend        = 0f;
-    private float       _heavyChargeTimer  = 0f;
-    private bool        _heavyChargeActive = false;
     [HideInInspector] public bool  IsIntroDive       = true;
     [HideInInspector] public bool  IsFlipping        = false;
 
@@ -92,6 +90,8 @@ public class NinjaController : MonoBehaviour
     private bool        _blockHeld;
     private bool        _lockOnPressed;
     private bool        _weaponTransformHeld;
+    private bool        _gravityPushPressed;
+    private bool        _gravityPullHeld;
 
     // ── Attack arc sweep timings ──────────────────────────────────────────
     private const float LIGHT_ATTACK_DURATION  = 0.30f;
@@ -296,54 +296,6 @@ public class NinjaController : MonoBehaviour
         HandleWeaponTransform();
     }
 
-    void HandleWeaponTransform()
-    {
-        bool transformPressed = false;
-        if (Gamepad.all.Count > PlayerIndex)
-            transformPressed = Gamepad.all[PlayerIndex].buttonWest.isPressed;
-        else if (PlayerIndex == 0)
-            transformPressed = Keyboard.current.uKey.isPressed;
-
-        if (transformPressed)
-        {
-            _isTransforming = true;
-            _transformTimer += Time.deltaTime;
-            
-            // Transform VFX
-            if (Random.value < 0.15f) SpawnTransformVFX();
-            
-            if (_transformTimer >= 1f)
-            {
-                SwapWeapon();
-                _transformTimer = 0;
-            }
-        }
-        else
-        {
-            _isTransforming = false;
-            _transformTimer = 0;
-        }
-    }
-
-    void SpawnTransformVFX()
-    {
-        var vfx = new GameObject("TransformVFX");
-        vfx.transform.position = transform.position + Vector3.up * 1.2f;
-        var ps = vfx.AddComponent<ParticleSystem>();
-        var main = ps.main;
-        main.startLifetime = 0.4f;
-        main.startSpeed = 8f;
-        main.startSize = 0.2f;
-        main.startColor = GameBootstrapper.PaletteGold;
-        main.loop = false;
-        var em = ps.emission;
-        em.SetBursts(new[] { new ParticleSystem.Burst(0f, 15) });
-        var shape = ps.shape;
-        shape.shapeType = ParticleSystemShapeType.Sphere;
-        shape.radius = 0.2f;
-        ps.Play();
-        Destroy(vfx, 0.5f);
-    }
 
     // ─────────────────────────────────────────────────────────────────────
     // INPUT POLLING
@@ -354,13 +306,9 @@ public class NinjaController : MonoBehaviour
         // Reset per-frame triggers
         _jumpPressed = false;
         _dodgePressed = false;
-        _lightPunchPressed = false;
-        _lightKickPressed = false;
         _lockOnPressed = false;
         _gravityPushPressed = false;
         _verticalInput = 0f; // Reset vertical input for each frame
-        _heavyPunchHeld = false; // Reset held states
-        _heavyKickHeld = false;
         _kiHeld = false;
         _blockHeld = false;
         _gravityPullHeld = false;
@@ -463,6 +411,7 @@ public class NinjaController : MonoBehaviour
             if (_pad.buttonWest.wasPressedThisFrame) _attackPressed = true;
             if (_pad.buttonEast.isPressed) _kiHeld = true;
             if (_pad.buttonNorth.wasPressedThisFrame) _dodgePressed = true;
+        }
 
         _moveInput = new Vector3(compositeMove.x, 0, compositeMove.y);
     }
