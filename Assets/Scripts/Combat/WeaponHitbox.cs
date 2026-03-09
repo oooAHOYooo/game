@@ -12,16 +12,17 @@ public class WeaponHitbox : MonoBehaviour
     private float     _arc;          // degrees of swing arc
     private bool      _active;
     private Transform _preferredTarget;
+    private Rigidbody _ownerRb;
     private HashSet<Collider> _hitThisSwing = new HashSet<Collider>();
 
     // Returns IEnumerator so NinjaController can yield on it
     public IEnumerator Activate(float damage, float range, float arc, float duration, Transform preferredTarget)
     {
-        _damage           = damage;
         _range            = range;
         _arc              = arc;
         _active           = true;
         _preferredTarget  = preferredTarget;
+        _ownerRb          = transform.root.GetComponent<Rigidbody>();
         _hitThisSwing.Clear();
 
         yield return new WaitForSeconds(duration);
@@ -47,27 +48,33 @@ public class WeaponHitbox : MonoBehaviour
         if (enemy != null)
         {
             _hitThisSwing.Add(other);
-            enemy.TakeDamage(_damage, transform.root);
+            
+            // PHYSICS-BASED DAMAGE: Scale damage by Rigidbody velocity
+            float impactVel = _ownerRb != null ? _ownerRb.linearVelocity.magnitude : 5f;
+            float physDamage = impactVel * 2.5f; // Physics multiplier
+            
+            enemy.TakeDamage(physDamage, transform.root);
 
             var nc = transform.root.GetComponentInChildren<NinjaController>();
             if (nc != null && ComboSystem.Instance != null)
             {
-                ComboSystem.Instance.RegisterHit(nc.PlayerIndex, _damage);
+                ComboSystem.Instance.RegisterHit(nc.PlayerIndex, physDamage);
             }
 
-            // Hit-stop: pause both parties briefly for impact weight
-            StartCoroutine(HitStop(0.06f));
+            // Hit-stop: scale duration with impact force
+            float stopDur = Mathf.Clamp(physDamage * 0.002f, 0.04f, 0.12f);
+            StartCoroutine(HitStop(stopDur));
 
-            // Knockback
+            // Knockback scaled by damage
             var rb = enemy.GetComponent<Rigidbody>();
             if (rb != null)
             {
-                Vector3 dir = (enemy.transform.position - transform.root.position).normalized + Vector3.up * 0.4f;
-                rb.AddForce(dir * (_damage * 0.5f), ForceMode.Impulse);
+                Vector3 dir = (enemy.transform.position - transform.root.position).normalized + Vector3.up * 0.3f;
+                rb.AddForce(dir * (physDamage * 0.4f), ForceMode.Impulse);
             }
 
-            // Spawn hit sparks
-            SpawnHitVFX(other.ClosestPoint(transform.position));
+            // Spawn hit sparks scaled by impact
+            SpawnScalingHitVFX(other.ClosestPoint(transform.position), impactVel);
         }
     }
 
@@ -78,22 +85,22 @@ public class WeaponHitbox : MonoBehaviour
         Time.timeScale = 1f;
     }
 
-    void SpawnHitVFX(Vector3 position)
+    void SpawnScalingHitVFX(Vector3 position, float velocity)
     {
-        var vfx  = new GameObject("HitSpark");
+        var vfx  = new GameObject("PhysicsSpark");
         vfx.transform.position = position;
         var ps   = vfx.AddComponent<ParticleSystem>();
         var main = ps.main;
-        main.duration      = 0.2f;
+        main.duration      = 0.25f;
         main.loop          = false;
-        main.startLifetime = new ParticleSystem.MinMaxCurve(0.1f, 0.25f);
-        main.startSpeed    = new ParticleSystem.MinMaxCurve(3f, 8f);
-        main.startSize     = new ParticleSystem.MinMaxCurve(0.05f, 0.15f);
+        main.startLifetime = new ParticleSystem.MinMaxCurve(0.1f, 0.3f);
+        main.startSpeed    = new ParticleSystem.MinMaxCurve(velocity * 0.5f, velocity);
+        main.startSize     = new ParticleSystem.MinMaxCurve(0.05f, 0.1f + velocity * 0.01f);
         main.startColor    = new ParticleSystem.MinMaxGradient(Color.white, GameBootstrapper.PaletteGold);
-        main.maxParticles  = 30;
+        main.maxParticles  = (int)(20 + velocity * 2);
 
         var emit = ps.emission;
-        emit.SetBursts(new[] { new ParticleSystem.Burst(0f, 30) });
+        emit.SetBursts(new[] { new ParticleSystem.Burst(0f, (short)main.maxParticles) });
         emit.rateOverTime = 0;
 
         var shape = ps.shape;
@@ -101,6 +108,6 @@ public class WeaponHitbox : MonoBehaviour
         shape.radius    = 0.05f;
 
         ps.Play();
-        Destroy(vfx, 0.5f);
+        Destroy(vfx, 0.6f);
     }
 }

@@ -49,9 +49,18 @@ public class GameHUD : MonoBehaviour
     // Divider line (split-screen centre)
     private Image _centreDivider;
 
-
     // Moves list (top-left)
     private Text  _movesList;
+
+    // Hints (contextual)
+    private Text  _p1Hint;
+    private Text  _p2Hint;
+    private Image _p1HintIcon;
+    private Image _p2HintIcon;
+
+    // Alpha groups for fading panels
+    private CanvasGroup _p1PanelGroup;
+    private CanvasGroup _p2PanelGroup;
 
     // Heart colors
     private static readonly Color HeartFull  = new Color(1f, 0.15f, 0.25f);
@@ -105,6 +114,7 @@ public class GameHUD : MonoBehaviour
         BuildHeartRow(p1Panel, _p1Hearts, MAX_HEARTS, new Vector2(10f, -28f), HeartFull);
         _p1KiFill  = CreateBar(p1Panel, "KI",  new Vector2(10f, -54f), GameBootstrapper.PaletteCyan, GameBootstrapper.PalettePurple, out _);
         _p1Combo   = CreateLabel(p1Panel, "", new Vector2(10f, -80f), 12, GameBootstrapper.PaletteGold);
+        _p1PanelGroup = p1Panel.AddComponent<CanvasGroup>();
 
         // ─── Player 2 panel (bottom-right) ───────────────────────────────
         var p2Panel = CreatePanel("P2Panel", new Vector2(0.75f, 0f), new Vector2(1f, 0.18f),
@@ -115,6 +125,16 @@ public class GameHUD : MonoBehaviour
         BuildHeartRow(p2Panel, _p2Hearts, MAX_HEARTS, new Vector2(10f, -40f), HeartFull);
         _p2KiFill     = CreateBar(p2Panel, "KI", new Vector2(10f, -66f), GameBootstrapper.PaletteCyan, GameBootstrapper.PalettePurple, out _);
         _p2Combo      = CreateLabel(p2Panel, "", new Vector2(10f, -92f), 12, GameBootstrapper.PaletteGold);
+        _p2PanelGroup = p2Panel.AddComponent<CanvasGroup>();
+
+        // ─── Contextual Hints ───────────────────────────────────────────
+        _p1Hint = CreateLabel(gameObject, "", new Vector2(20f, -200f), 14, Color.white);
+        _p2Hint = CreateLabel(gameObject, "", new Vector2(-20f, -200f), 14, Color.white);
+        var p2rt = _p2Hint.GetComponent<RectTransform>();
+        p2rt.anchorMin = p2rt.anchorMax = new Vector2(1f, 1f);
+        p2rt.pivot = new Vector2(1f, 1f);
+        _p1Hint.alignment = TextAnchor.MiddleCenter;
+        _p2Hint.alignment = TextAnchor.MiddleCenter;
 
         // ─── Wave banner (centre top) ─────────────────────────────────────
         var bannerPanel = CreatePanel("BannerPanel", new Vector2(0.3f, 0.88f), new Vector2(0.7f, 1f),
@@ -257,9 +277,6 @@ public class GameHUD : MonoBehaviour
                 _p2GhostBadge.enabled = _ctrls[1].IsGhost;
         }
 
-        UpdateComboCount(_p1Combo, 0);
-        UpdateComboCount(_p2Combo, 1);
-
         // Village hearts
         if (_village != null)
             UpdateHearts(_villageHearts, _village.CurrentHP, _village.MaxHP, VillageHeartFull, VillageHeartFull * 0.7f, VillageHeartEmpty);
@@ -269,6 +286,55 @@ public class GameHUD : MonoBehaviour
         {
             _ballScore.text = $"ORBS SAVED: {BallGoal.Instance.Score}";
         }
+
+        UpdateContextualHints();
+        UpdatePanelVisibility();
+    }
+
+    void UpdateContextualHints()
+    {
+        for (int i = 0; i < 2; i++)
+        {
+            if (_ctrls[i] == null) continue;
+            var hintText = i == 0 ? _p1Hint : _p2Hint;
+            
+            // HINT: FLYING (Nintendo style - only show if falling for a bit)
+            if (_ctrls[i].FallTime > 1.2f && !_ctrls[i].IsFlying)
+            {
+                hintText.text = "<b>HOLD RS UP</b>\nTO FLY!";
+                hintText.color = Color.Lerp(Color.white, GameBootstrapper.PaletteCyan, Mathf.PingPong(Time.time * 4f, 1f));
+                hintText.transform.localScale = Vector3.one * (1f + Mathf.Sin(Time.time * 8f) * 0.05f);
+            }
+            // HINT: WEAPON TRANSFORM
+            else if (_ctrls[i].IsTransforming)
+            {
+                int percent = (int)(_ctrls[i].TransformProgress * 100);
+                hintText.text = $"TRANSFORMING...\n{percent}%";
+                hintText.color = GameBootstrapper.PaletteGold;
+            }
+            else
+            {
+                hintText.text = "";
+            }
+        }
+    }
+
+    void UpdatePanelVisibility()
+    {
+        // MINIMALISM: Fade out UI if player is full health, full ki, and not in combat
+        UpdateGroup(_p1PanelGroup, 0);
+        UpdateGroup(_p2PanelGroup, 1);
+    }
+
+    void UpdateGroup(CanvasGroup group, int index)
+    {
+        if (group == null || _players[index] == null || _ctrls[index] == null) return;
+        
+        bool isBusy = _ctrls[index].IsAttacking || _ctrls[index].IsFiringLaser || _ctrls[index].IsBlocking || _players[index].CurrentHP < _players[index].MaxHP || _ctrls[index].CurrentKi < _ctrls[index].KiMax * 0.95f;
+        
+        float targetAlpha = isBusy ? 1f : 0.25f;
+        group.alpha = Mathf.MoveTowards(group.alpha, targetAlpha, Time.deltaTime * 2f);
+>>>>>>> 68e0511 (Implement Physics Combat, Nintendo-style HUD, and Totem Upgrades)
     }
 
 

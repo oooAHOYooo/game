@@ -207,9 +207,12 @@ public class EnemyBase : MonoBehaviour
         IsAlive = false;
         IsActiveEnemy = false;
 
-        // Notify wave manager
+        // Notify systems
         var wm = FindAnyObjectByType<WaveManager>();
         if (wm != null) wm.OnEnemyDied(this);
+
+        var vill = FindAnyObjectByType<Village>();
+        if (vill != null) vill.OnEnemyKilledNearVillage(transform.position);
 
         // Hide hearts
         if (_heartCanvas != null)

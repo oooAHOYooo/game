@@ -85,4 +85,13 @@ public static class GameSettings
     // we already have VillageDamagePerTick = 5f at top, so we'll re-use it or define a precise one
     public static float TotemHealRadius = 4.5f;
     public static float TotemHealRate = 12f;
+    
+    // ── Faith & Totem Upgrades ───────────────────────────────────────────
+    public static float FaithPerKillNearVillage = 5f;
+    public static float FaithPerSecondWorshipped = 1f;
+    public static float TotemLevel2Threshold = 100f;
+    public static float TotemLevel3Threshold = 250f;
+    public static float TotemShieldRadius = 30f;
+    public static float TotemShieldSlowAmount = 0.5f;
+    public static float TotemExtraKiGain = 2f;
 }

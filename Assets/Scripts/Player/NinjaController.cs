@@ -74,20 +74,24 @@ public class NinjaController : MonoBehaviour
     private Transform   _lockedTarget;
     private GhostAI     _ghostAI;
     private LaserBeam   _laser;
+    private Vector3     _kiMuzzlePos;
+    private float       _lastStompTime;
+    private float       _fallTime; // Track how long we've been falling
+    public  float       FallTime => _fallTime;
+
+    private bool        _isTransforming;
+    public  bool        IsTransforming => _isTransforming;
+    private float       _transformTimer;
+    public  float       TransformProgress => Mathf.Clamp01(_transformTimer / 1f);
     private Vector3     _moveInput;
     private float       _verticalInput;
     private bool        _jumpPressed;
     private bool        _dodgePressed;
-    private bool        _lightPunchPressed;
-    private bool        _heavyPunchHeld;
-    private bool        _lightKickPressed;
-    private bool        _heavyKickHeld;
+    private bool        _attackPressed; // Single attack button
     private bool        _kiHeld;
     private bool        _blockHeld;
     private bool        _lockOnPressed;
     private bool        _weaponTransformHeld;
-    private bool        _gravityPullHeld;
-    private bool        _gravityPushPressed;
 
     // ── Attack arc sweep timings ──────────────────────────────────────────
     private const float LIGHT_ATTACK_DURATION  = 0.30f;
@@ -146,7 +150,6 @@ public class NinjaController : MonoBehaviour
 
         PollInput();
         ApplySettings();
-        HandleWeaponTransform();
         HandleDodgeCooldown();
         HandleKi();
         HandleLockOn();
@@ -284,7 +287,62 @@ public class NinjaController : MonoBehaviour
         HandleMovement();
         HandleJumpAndFlight();
         HandleDodge();
+        if (!IsFlying && !IsGrounded && _rb.linearVelocity.y < -3f)
+            _fallTime += Time.deltaTime;
+        else
+            _fallTime = 0;
+
         HandleAttacks();
+        HandleWeaponTransform();
+    }
+
+    void HandleWeaponTransform()
+    {
+        bool transformPressed = false;
+        if (Gamepad.all.Count > PlayerIndex)
+            transformPressed = Gamepad.all[PlayerIndex].buttonWest.isPressed;
+        else if (PlayerIndex == 0)
+            transformPressed = Keyboard.current.uKey.isPressed;
+
+        if (transformPressed)
+        {
+            _isTransforming = true;
+            _transformTimer += Time.deltaTime;
+            
+            // Transform VFX
+            if (Random.value < 0.15f) SpawnTransformVFX();
+            
+            if (_transformTimer >= 1f)
+            {
+                SwapWeapon();
+                _transformTimer = 0;
+            }
+        }
+        else
+        {
+            _isTransforming = false;
+            _transformTimer = 0;
+        }
+    }
+
+    void SpawnTransformVFX()
+    {
+        var vfx = new GameObject("TransformVFX");
+        vfx.transform.position = transform.position + Vector3.up * 1.2f;
+        var ps = vfx.AddComponent<ParticleSystem>();
+        var main = ps.main;
+        main.startLifetime = 0.4f;
+        main.startSpeed = 8f;
+        main.startSize = 0.2f;
+        main.startColor = GameBootstrapper.PaletteGold;
+        main.loop = false;
+        var em = ps.emission;
+        em.SetBursts(new[] { new ParticleSystem.Burst(0f, 15) });
+        var shape = ps.shape;
+        shape.shapeType = ParticleSystemShapeType.Sphere;
+        shape.radius = 0.2f;
+        ps.Play();
+        Destroy(vfx, 0.5f);
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -336,32 +394,33 @@ public class NinjaController : MonoBehaviour
                 compositeMove.x = Mathf.Clamp(compositeMove.x, -1f, 1f);
                 compositeMove.y = Mathf.Clamp(compositeMove.y, -1f, 1f);
 
+<<<<<<< HEAD
                 if (k.eKey.isPressed) _verticalInput = 1f;
                 if (k.qKey.isPressed) _verticalInput = -1f;
                 
                 if (k.spaceKey.wasPressedThisFrame) _jumpPressed = true;
                 if (k.leftShiftKey.wasPressedThisFrame || k.rightShiftKey.wasPressedThisFrame) _dodgePressed = true;
                 
-                if (k.jKey.wasPressedThisFrame || k.pKey.wasPressedThisFrame) _lightPunchPressed = true;
-                _heavyPunchHeld = k.kKey.isPressed || k.backslashKey.isPressed;
+                // My simplified physics attack (J or P)
+                if (k.jKey.wasPressedThisFrame || k.pKey.wasPressedThisFrame) _attackPressed = true;
                 
-                if (k.uKey.wasPressedThisFrame || k.semicolonKey.wasPressedThisFrame) _lightKickPressed = true;
-                _heavyKickHeld = k.iKey.isPressed || k.quoteKey.isPressed;
+                _kiHeld = k.kKey.isPressed || k.backslashKey.isPressed;
                 
-                _kiHeld = k.lKey.isPressed || k.enterKey.isPressed;
-                _blockHeld = k.oKey.isPressed || k.slashKey.isPressed;
+                // My simplified block (L or Enter)
+                _blockHeld = k.lKey.isPressed || k.enterKey.isPressed;
                 
+                _weaponTransformHeld = k.uKey.isPressed || k.semicolonKey.isPressed;
                 if (k.fKey.wasPressedThisFrame) _lockOnPressed = true;
             }
             if (m != null)
             {
-                if (m.leftButton.wasPressedThisFrame) _lightPunchPressed = true;
-                if (m.rightButton.isPressed) _heavyPunchHeld = true;
+                if (m.leftButton.wasPressedThisFrame) _attackPressed = true;
+                _blockHeld |= m.rightButton.isPressed;
             }
         }
 
 
-        // 2. Keyboard P2: RIGHT SIDE (Arrows + R-Ctrl + Numpad / [ ] \ )
+        // 2. Keyboard P2: RIGHT SIDE
         if (PlayerIndex == 1)
         {
             var k = Keyboard.current;
@@ -379,14 +438,10 @@ public class NinjaController : MonoBehaviour
                 if (k.rightCtrlKey.wasPressedThisFrame || k.numpad0Key.wasPressedThisFrame) _jumpPressed = true;
                 if (k.rightShiftKey.wasPressedThisFrame || k.numpadPeriodKey.wasPressedThisFrame) _dodgePressed = true;
 
-                // Numpad Attacks (or symbols if no numpad)
-                if (k.numpad7Key.wasPressedThisFrame || k.pKey.wasPressedThisFrame) _lightPunchPressed = true;
-                _heavyPunchHeld = k.numpad8Key.isPressed || k.backslashKey.isPressed;
-                if (k.numpad4Key.wasPressedThisFrame || k.semicolonKey.wasPressedThisFrame) _lightKickPressed = true;
-                _heavyKickHeld = k.numpad5Key.isPressed || k.quoteKey.isPressed;
-                
+                if (k.numpad7Key.wasPressedThisFrame || k.pKey.wasPressedThisFrame) _attackPressed = true;
                 _kiHeld = k.numpadEnterKey.isPressed || k.enterKey.isPressed;
                 _blockHeld = k.numpadDivideKey.isPressed || k.slashKey.isPressed;
+                _weaponTransformHeld = k.numpad9Key.isPressed;
             }
         }
 
@@ -406,29 +461,9 @@ public class NinjaController : MonoBehaviour
             else if (_pad.dpad.down.isPressed) _verticalInput = -1f;
 
             if (_pad.buttonSouth.wasPressedThisFrame) _jumpPressed = true;
-            
-            bool rbModifier = _pad.rightShoulder.isPressed;
-            if (rbModifier)
-            {
-                if (_pad.buttonWest.wasPressedThisFrame) _lightPunchPressed = true;
-                _heavyPunchHeld = _pad.buttonWest.isPressed;
-                if (_pad.buttonNorth.wasPressedThisFrame) _lightKickPressed = true;
-                _heavyKickHeld = _pad.buttonNorth.isPressed;
-                _kiHeld = _pad.buttonEast.isPressed;
-            }
-            else
-            {
-                if (_pad.buttonWest.wasPressedThisFrame) _lightPunchPressed = true;
-                if (_pad.buttonNorth.wasPressedThisFrame) _lightKickPressed = true;
-                _kiHeld = _pad.buttonEast.isPressed;
-            }
-
-            _gravityPullHeld = _pad.leftTrigger.ReadValue() > 0.5f;
-            if (_pad.rightTrigger.wasPressedThisFrame) _gravityPushPressed = true;
-            _blockHeld = _pad.leftShoulder.isPressed; 
-            _weaponTransformHeld = _pad.rightStickButton.isPressed;
-            if (_pad.leftStickButton.wasPressedThisFrame) _lockOnPressed = true;
-        }
+            if (_pad.buttonWest.wasPressedThisFrame) _attackPressed = true;
+            if (_pad.buttonEast.isPressed) _kiHeld = true;
+            if (_pad.buttonNorth.wasPressedThisFrame) _dodgePressed = true;
 
         _moveInput = new Vector3(compositeMove.x, 0, compositeMove.y);
     }
@@ -780,47 +815,26 @@ public class NinjaController : MonoBehaviour
     {
         if (_attackCooldown > 0 || IsChargingKi) return;
 
-        // Light Punch (RB/R1)
-        if (_lightPunchPressed)
+        if (_attackPressed)
         {
-            LastAttackType = 1;
-            StartCoroutine(PerformLightAttack());
+            StartCoroutine(PerformAttack());
         }
+    }
 
-        // Heavy Punch (RT/R2 hold)
-        if (_heavyPunchHeld)
-        {
-            _heavyChargeTimer += Time.fixedDeltaTime;
-            _heavyChargeActive = true;
-        }
-        else if (_heavyChargeActive)
-        {
-            _heavyChargeActive = false;
-            LastAttackType = 2;
-            StartCoroutine(PerformHeavyAttack(_heavyChargeTimer));
-            _heavyChargeTimer = 0f;
-        }
+    IEnumerator PerformAttack()
+    {
+        IsAttacking = true;
+        _attackCooldown = 0.4f;
 
-        // Light Kick (LB/L1)
-        if (_lightKickPressed)
-        {
-            LastAttackType = 3;
-            StartCoroutine(PerformLightKick());
-        }
+        // Thrust forward based on speed for physics impact
+        float boost = IsFlying ? 12f : 6f;
+        _rb.AddForce(transform.forward * boost, ForceMode.VelocityChange);
 
-        // Heavy Kick (LT/L2 hold)
-        if (_heavyKickHeld)
-        {
-            _heavyChargeTimer += Time.fixedDeltaTime;
-            _heavyChargeActive = true;
-        }
-        else if (_heavyChargeActive && _heavyKickHeld == false)
-        {
-            _heavyChargeActive = false;
-            LastAttackType = 4;
-            StartCoroutine(PerformHeavyKick(_heavyChargeTimer));
-            _heavyChargeTimer = 0f;
-        }
+        // Notify hitbox to start tracking physics velocity
+        ActivateWeaponHitbox(0, 2f, 90f, 0.4f);
+
+        yield return new WaitForSeconds(0.4f);
+        IsAttacking = false;
     }
 
     IEnumerator PerformLightAttack()
