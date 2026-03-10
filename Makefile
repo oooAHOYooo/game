@@ -64,3 +64,7 @@ open:
 # ── Build Switch ────────────────────────────────────────────
 switch:
 	powershell.exe -ExecutionPolicy Bypass -File build_switch.ps1
+
+# ── Build Linux ARM (RPi) ───────────────────────────────────
+linux-arm:
+	powershell.exe -ExecutionPolicy Bypass -File build_linux_arm.ps1
