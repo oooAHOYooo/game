@@ -65,13 +65,40 @@ public class WeaponHitbox : MonoBehaviour
             float stopDur = Mathf.Clamp(physDamage * 0.002f, 0.04f, 0.12f);
             StartCoroutine(HitStop(stopDur));
 
-            // Knockback scaled by damage
-            var rb = enemy.GetComponent<Rigidbody>();
-            if (rb != null)
+            // Directional knockback — player velocity at impact drives the launch vector.
+            // Moving forward = enemy goes where you're going (Skate-style momentum transfer).
+            // Diving = spike; rising = uppercut; neutral = standard send.
+            var enemyRb = enemy.GetComponent<Rigidbody>();
+            if (enemyRb != null)
             {
-                Vector3 dir = (enemy.transform.position - transform.root.position).normalized + Vector3.up * 0.3f;
-                rb.AddForce(dir * (physDamage * 0.4f), ForceMode.Impulse);
+                Vector3 playerVel = _ownerRb != null ? _ownerRb.linearVelocity : Vector3.zero;
+                Vector3 horizVel  = new Vector3(playerVel.x, 0f, playerVel.z);
+                Vector3 awayDir   = (enemy.transform.position - transform.root.position);
+                awayDir.y = 0f;
+                if (awayDir.sqrMagnitude < 0.01f) awayDir = transform.root.forward;
+                awayDir.Normalize();
+
+                Vector3 knockDir;
+                if (horizVel.magnitude > 3f)
+                {
+                    // Blend player travel direction into the send direction
+                    knockDir = (horizVel.normalized * 0.6f + awayDir * 0.4f).normalized;
+                    float upBias = playerVel.y < -6f ? 0.10f   // dive → spike outward
+                                 : playerVel.y >  4f ? 1.40f   // rising → uppercut skyward
+                                 : 0.45f;                       // neutral → standard
+                    knockDir = (knockDir + Vector3.up * upBias).normalized;
+                }
+                else
+                {
+                    knockDir = (awayDir + Vector3.up * 0.4f).normalized;
+                }
+
+                enemyRb.linearVelocity = Vector3.zero; // clean slate — force is predictable
+                enemyRb.AddForce(knockDir * (physDamage * 0.45f), ForceMode.Impulse);
             }
+
+            // Momentum burst: chaining hits slightly accelerates the attacker
+            if (nc != null) nc.ApplySpeedBoost(1.0f, 1.15f);
 
             // Spawn hit sparks scaled by impact
             SpawnScalingHitVFX(other.ClosestPoint(transform.position), impactVel);

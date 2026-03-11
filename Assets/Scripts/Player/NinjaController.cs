@@ -77,6 +77,11 @@ public class NinjaController : MonoBehaviour
     private float       _fallTime; // Track how long we've been falling
     public  float       FallTime => _fallTime;
 
+    // ── Navigation / physics combat ───────────────────────────────────────
+    [HideInInspector] public bool  IsDiveBombing      = false;
+    private float _diveBombOriginY   = 0f;
+    private float _totemLaunchCooldown = 0f;
+
     private bool        _isTransforming;
     public  bool        IsTransforming => _isTransforming;
     private float       _transformTimer;
@@ -158,7 +163,8 @@ public class NinjaController : MonoBehaviour
         HandleWeaponRotation();
         
         if (IsIntroDive) HandleIntroDiveEffects();
-        
+
+        HandleTotemLaunchCooldown();
         HandleBackflipJuice();
         UpdateAnimator();
     }
@@ -470,10 +476,32 @@ public class NinjaController : MonoBehaviour
     // ─────────────────────────────────────────────────────────────────────
     void HandleJumpAndFlight()
     {
+        // ── TOTEM MEGA-LAUNCH ──────────────────────────────────────────────
+        // Jumping from near the totem launches you in your movement direction
+        // at speed — the island's fast-travel slingshot.
+        if (_jumpPressed && IsGrounded && _totemLaunchCooldown <= 0f && Village.Instance != null)
+        {
+            float distToTotem = Vector3.Distance(transform.position, Village.Instance.TotemPosition);
+            if (distToTotem <= GameSettings.TotemHealRadius * 1.8f)
+            {
+                Vector3 hDir = _moveInput.sqrMagnitude > 0.1f
+                    ? new Vector3(_moveInput.x, 0f, _moveInput.z).normalized
+                    : transform.forward;
+                _rb.linearVelocity = Vector3.zero;
+                _rb.AddForce(hDir * 22f + Vector3.up * 18f, ForceMode.VelocityChange);
+                IsFlying              = true;
+                _totemLaunchCooldown  = 3f;
+                _jumpPressed          = false; // consume so normal jump doesn't also fire
+                SpawnTotemLaunchVFX();
+                SoundManager.PlayRespawn(Village.Instance.TotemPosition);
+                SplitScreenCamera.ShakeCamera(PlayerIndex, 0.45f, 0.3f);
+            }
+        }
+
         // Jump from ground
         if (_jumpPressed && IsGrounded && !IsFlying)
         {
-            _rb.AddForce(Vector3.up * JumpForce, ForceMode.VelocityChange); // Still using JumpForce field, but could move if needed
+            _rb.AddForce(Vector3.up * JumpForce, ForceMode.VelocityChange);
             IsFlying = true;
         }
 
@@ -523,8 +551,13 @@ public class NinjaController : MonoBehaviour
         {
             IsFlying = false;
 
-            // STOMP MECHANIC
-            if (fallSpeed > GameSettings.StompHeightThreshold)
+            if (IsDiveBombing)
+            {
+                float bombHeight = Mathf.Max(5f, _diveBombOriginY - transform.position.y);
+                IsDiveBombing = false;
+                TriggerDiveBombLanding(bombHeight);
+            }
+            else if (fallSpeed > GameSettings.StompHeightThreshold)
             {
                 TriggerStomp(fallSpeed);
             }
@@ -612,6 +645,114 @@ public class NinjaController : MonoBehaviour
             SplitScreenCamera.ShakeCamera(PlayerIndex, 1.4f, 1f);
             SpawnSonicBoom();
         }
+    }
+
+    // ── DIVE-BOMB LANDING ─────────────────────────────────────────────────
+    // Called when IsDiveBombing player touches ground. Much bigger than normal
+    // stomp — also launches enemies straight UP for aerial juggle chasing.
+    void TriggerDiveBombLanding(float bombHeight)
+    {
+        float intensity = Mathf.Clamp(bombHeight * 2f, 15f, 90f);
+
+        // Big shockwave ring VFX
+        SpawnDiveBombImpactVFX();
+
+        // Bigger shake than normal stomp
+        SplitScreenCamera.ShakeCamera(PlayerIndex,
+            Mathf.Min(1.6f, 0.6f + bombHeight * 0.025f), 0.7f);
+
+        // Reuse stomp for base effects (VFX, totem resonance, fire extinguish, damage)
+        TriggerStomp(intensity);
+
+        // JUGGLE LAUNCH: override enemy velocity upward so players can chase in air
+        float juggleRadius = GameSettings.StompRadius * 1.3f;
+        Collider[] hits = Physics.OverlapSphere(transform.position, juggleRadius);
+        foreach (var h in hits)
+        {
+            var eb = h.GetComponentInParent<EnemyBase>();
+            if (eb == null || !eb.IsAlive) continue;
+            var rb = eb.GetComponent<Rigidbody>();
+            if (rb == null) continue;
+
+            Vector3 outward = (eb.transform.position - transform.position);
+            outward.y = 0f;
+            if (outward.sqrMagnitude < 0.01f) outward = transform.forward;
+            outward.Normalize();
+
+            float upForce = Mathf.Clamp(intensity * 0.4f, 18f, 45f);
+            rb.linearVelocity = outward * 6f + Vector3.up * upForce;
+        }
+
+        SoundManager.PlayEnemyDeath(true, transform.position); // big BOOM
+    }
+
+    void SpawnDiveBombImpactVFX()
+    {
+        // Expanding shockwave ring in player's aura colour
+        var ring = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        ring.name = "DiveBombRing";
+        ring.transform.position   = transform.position + Vector3.up * 0.05f;
+        ring.transform.localScale = new Vector3(0.5f, 0.04f, 0.5f);
+        Destroy(ring.GetComponent<Collider>());
+
+        var mat = new Material(GameBootstrapper.GetHDRPLitShader());
+        mat.color = BodyColor;
+        GameBootstrapper.SetHDRPEmission(mat, BodyColor, 14f);
+        ring.GetComponent<Renderer>().material = mat;
+
+        StartCoroutine(AnimateDiveBombRing(ring, mat));
+    }
+
+    IEnumerator AnimateDiveBombRing(GameObject ring, Material mat)
+    {
+        float t = 0f;
+        while (t < 0.45f)
+        {
+            t += Time.deltaTime;
+            float s = t * 55f;
+            ring.transform.localScale = new Vector3(s, 0.04f, s);
+            GameBootstrapper.SetHDRPEmission(mat, BodyColor, 14f * (1f - t / 0.45f));
+            yield return null;
+        }
+        Destroy(ring);
+    }
+
+    // ── TOTEM LAUNCH VFX ─────────────────────────────────────────────────
+    void SpawnTotemLaunchVFX()
+    {
+        if (Village.Instance == null) return;
+        Vector3 pos = Village.Instance.TotemPosition + Vector3.up * 0.5f;
+
+        var obj  = new GameObject("TotemLaunchVFX");
+        obj.transform.position = pos;
+        var ps   = obj.AddComponent<ParticleSystem>();
+        ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+        var main = ps.main;
+        main.loop          = false;
+        main.duration      = 0.5f;
+        main.startLifetime = new ParticleSystem.MinMaxCurve(0.4f, 0.9f);
+        main.startSpeed    = new ParticleSystem.MinMaxCurve(12f, 28f);
+        main.startSize     = new ParticleSystem.MinMaxCurve(0.1f, 0.3f);
+        main.startColor    = new ParticleSystem.MinMaxGradient(
+            GameBootstrapper.PaletteGold, GameBootstrapper.PaletteCyan);
+        main.maxParticles  = 80;
+        main.gravityModifier = -0.25f;
+
+        var em = ps.emission;
+        em.SetBursts(new[] { new ParticleSystem.Burst(0f, 80) });
+        em.rateOverTime = 0;
+
+        var shape = ps.shape;
+        shape.shapeType = ParticleSystemShapeType.Cone;
+        shape.angle     = 30f;
+        ps.Play();
+        Destroy(obj, 1.5f);
+    }
+
+    // ── TOTEM LAUNCH COOLDOWN ─────────────────────────────────────────────
+    void HandleTotemLaunchCooldown()
+    {
+        if (_totemLaunchCooldown > 0f) _totemLaunchCooldown -= Time.deltaTime;
     }
 
     void SpawnSonicBoom()
@@ -765,7 +906,62 @@ public class NinjaController : MonoBehaviour
 
         if (_attackPressed)
         {
-            StartCoroutine(PerformAttack());
+            // Dive-bomb: attack while airborne with descend input → spike down into enemies
+            if (IsFlying && _verticalInput < -0.3f && !IsDiveBombing)
+                StartCoroutine(PerformDiveBomb());
+            else
+                StartCoroutine(PerformAttack());
+        }
+    }
+
+    IEnumerator PerformDiveBomb()
+    {
+        IsDiveBombing    = true;
+        IsAttacking      = true;
+        _attackCooldown  = 0.8f;
+        _diveBombOriginY = transform.position.y;
+
+        // Lock into fast downward spike — kill horizontal drift for precision
+        _rb.linearVelocity = new Vector3(_rb.linearVelocity.x * 0.3f, -50f, _rb.linearVelocity.z * 0.3f);
+
+        StartCoroutine(DiveBombTrailRoutine());
+        SoundManager.PlayLaserCharge(transform.position);
+
+        // Wait for CheckGrounded to clear IsDiveBombing on impact, or timeout
+        float timeout = 4f;
+        while (IsDiveBombing && timeout > 0f)
+        {
+            timeout -= Time.deltaTime;
+            yield return null;
+        }
+
+        IsDiveBombing = false;
+        IsAttacking   = false;
+    }
+
+    IEnumerator DiveBombTrailRoutine()
+    {
+        while (IsDiveBombing)
+        {
+            var trail = new GameObject("DiveBombTrail");
+            trail.transform.position = transform.position;
+            var ps   = trail.AddComponent<ParticleSystem>();
+            var main = ps.main;
+            ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            main.loop          = false;
+            main.duration      = 0.15f;
+            main.startLifetime = 0.25f;
+            main.startSpeed    = 4f;
+            main.startSize     = 0.25f;
+            main.startColor    = new ParticleSystem.MinMaxGradient(BodyColor, Color.white);
+            main.maxParticles  = 12;
+            main.gravityModifier = -0.15f;
+            var em = ps.emission;
+            em.SetBursts(new[] { new ParticleSystem.Burst(0f, 12) });
+            em.rateOverTime = 0;
+            ps.Play();
+            Destroy(trail, 0.4f);
+            yield return new WaitForSeconds(0.04f);
         }
     }
 
