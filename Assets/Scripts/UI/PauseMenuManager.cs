@@ -77,23 +77,8 @@ public class PauseMenuManager : MonoBehaviour
         var titleText = CreateLabel(overlay, "PAUSED", new Vector2(0, 300), 80, GameBootstrapper.PaletteGold);
         titleText.alignment = TextAnchor.MiddleCenter;
 
-        // ─── Controls Info ───────────────────────────────────────────────
-        string controls = "CONTROLS REFERENCE\n\n" +
-                          "<color=#FFC819>PLAYER 1 (Keyboard Left)</color>\n" +
-                          "Move: WASD   |   Jump/Fly: Space\n" +
-                          "Dodge: L-Shift   |   Light Punch: J   |   Heavy Punch: K\n" +
-                          "Light Kick: U    |   Heavy Kick: I    |   Ki Charge: L\n\n" +
-                          "<color=#1AE5FF>PLAYER 2 (Keyboard Right)</color>\n" +
-                          "Move: Arrows |   Jump/Fly: R-Ctrl\n" +
-                          "Dodge: R-Shift   |   Light Punch: P   |   Heavy Punch: \\\n" +
-                          "Light Kick: ;    |   Heavy Kick: '    |   Ki Charge: Enter\n\n" +
-                          "<color=#AAAAAA>GAMEPAD (Any)</color>\n" +
-                          "Move: Left Stick | Jump: South Btn | Dodge: East Btn\n" +
-                          "Attacks: West/North Btns | Ki: R-Bumper";
-
-        var controlsText = CreateLabel(overlay, controls, new Vector2(-250, -50), 32, Color.white);
-        controlsText.alignment = TextAnchor.MiddleLeft;
-        controlsText.supportRichText = true;
+        // ─── Controls Reference (three-column) ──────────────────────────
+        BuildControlsSection(overlay);
 
         // ─── Button Container ────────────────────────────────────────────
         var btnGroup = new GameObject("ButtonGroup");
@@ -115,6 +100,113 @@ public class PauseMenuManager : MonoBehaviour
         SetupNavigation(_settingsButton, _saveButton, _resumeButton);
         SetupNavigation(_saveButton, _exitButton, _settingsButton);
         SetupNavigation(_exitButton, _resumeButton, _saveButton);
+    }
+
+    void BuildControlsSection(GameObject parent)
+    {
+        // Section header
+        var hdr = CreateLabel(parent, "— CONTROLS REFERENCE —", new Vector2(-210, 195), 34, GameBootstrapper.PaletteGold);
+        hdr.alignment = TextAnchor.MiddleCenter;
+        var hdrRT = hdr.GetComponent<RectTransform>();
+        hdrRT.sizeDelta = new Vector2(860, 50);
+
+        // Column data
+        string p1Body =
+            "<b>MOVE</b>\nWASD\n\n" +
+            "<b>JUMP</b>\nSPACE\n\n" +
+            "<b>FLY</b>\nE / Q\n\n" +
+            "<b>DODGE</b>\nSHIFT\n\n" +
+            "<b>ATTACK</b>\nJ\n\n" +
+            "<b>HEAVY</b>\nK (hold)\n\n" +
+            "<b>KI BEAM</b>\nL (hold)\n\n" +
+            "<b>BLOCK</b>\nI\n\n" +
+            "<b>WEAPON</b>\nU (hold 1s)\n\n" +
+            "<b>LOCK-ON</b>\nF";
+
+        string padBody =
+            "<b>MOVE</b>\nLeft Stick\n\n" +
+            "<b>JUMP</b>\nSouth  (A/Cross)\n\n" +
+            "<b>FLY</b>\nR-Stick Up\n\n" +
+            "<b>DODGE</b>\nEast  (B/Circle)\n\n" +
+            "<b>ATTACK</b>\nRB / RT\n\n" +
+            "<b>HEAVY</b>\nRT (hold)\n\n" +
+            "<b>KI BEAM</b>\nLT (hold)\n\n" +
+            "<b>BLOCK</b>\nLB\n\n" +
+            "<b>WEAPON</b>\nLB (hold 1s)\n\n" +
+            "<b>LOCK-ON</b>\nR-Stick Btn";
+
+        string p2Body =
+            "<b>MOVE</b>\nArrow Keys\n\n" +
+            "<b>JUMP</b>\nR-Ctrl\n\n" +
+            "<b>FLY</b>\nR-Ctrl (hold)\n\n" +
+            "<b>DODGE</b>\nR-Shift\n\n" +
+            "<b>ATTACK</b>\nP\n\n" +
+            "<b>HEAVY</b>\n\\ (hold)\n\n" +
+            "<b>KI BEAM</b>\nEnter (hold)\n\n" +
+            "<b>BLOCK</b>\n;\n\n" +
+            "<b>WEAPON</b>\n' (hold 1s)\n\n" +
+            "<b>LOCK-ON</b>\n—";
+
+        CreateControlColumn(parent, "PLAYER 1", "Keyboard", p1Body, new Vector2(-530, -60), GameBootstrapper.PaletteGold);
+        CreateControlColumn(parent, "GAMEPAD",  "",          padBody, new Vector2(-165, -60), new Color(0.75f, 0.75f, 0.75f));
+        CreateControlColumn(parent, "PLAYER 2", "Keyboard", p2Body, new Vector2( 200, -60), GameBootstrapper.PaletteCyan);
+    }
+
+    void CreateControlColumn(GameObject parent, string title, string subtitle, string body, Vector2 pos, Color titleColor)
+    {
+        const float W = 310f;
+        const float H = 490f;
+
+        // Background card
+        var card = new GameObject("Card_" + title);
+        card.transform.SetParent(parent.transform, false);
+        var cardImg = card.AddComponent<Image>();
+        cardImg.color = new Color(0.06f, 0.06f, 0.16f, 0.82f);
+        var cardRT = card.GetComponent<RectTransform>();
+        cardRT.anchorMin = cardRT.anchorMax = new Vector2(0.5f, 0.5f);
+        cardRT.anchoredPosition = pos;
+        cardRT.sizeDelta = new Vector2(W, H);
+
+        // Thin top accent bar
+        var accent = new GameObject("Accent");
+        accent.transform.SetParent(card.transform, false);
+        var accentImg = accent.AddComponent<Image>();
+        accentImg.color = titleColor;
+        var aRT = accent.GetComponent<RectTransform>();
+        aRT.anchorMin = new Vector2(0f, 1f);
+        aRT.anchorMax = new Vector2(1f, 1f);
+        aRT.pivot     = new Vector2(0.5f, 1f);
+        aRT.offsetMin = aRT.offsetMax = Vector2.zero;
+        aRT.sizeDelta = new Vector2(0f, 4f);
+
+        // Title label
+        var titleLbl = CreateLabel(card, title, new Vector2(0, -18), 28, titleColor);
+        titleLbl.alignment = TextAnchor.UpperCenter;
+        titleLbl.supportRichText = false;
+        var tRT = titleLbl.GetComponent<RectTransform>();
+        tRT.sizeDelta = new Vector2(W - 16f, 38f);
+
+        // Subtitle (e.g. "Keyboard")
+        if (!string.IsNullOrEmpty(subtitle))
+        {
+            var subLbl = CreateLabel(card, subtitle, new Vector2(0, -50), 20, new Color(0.7f, 0.7f, 0.7f));
+            subLbl.alignment = TextAnchor.UpperCenter;
+            subLbl.supportRichText = false;
+            var sRT = subLbl.GetComponent<RectTransform>();
+            sRT.sizeDelta = new Vector2(W - 16f, 28f);
+        }
+
+        // Body — action / key pairs
+        float bodyY = string.IsNullOrEmpty(subtitle) ? -58f : -78f;
+        var bodyLbl = CreateLabel(card, body, new Vector2(0, bodyY), 22, Color.white);
+        bodyLbl.alignment = TextAnchor.UpperCenter;
+        bodyLbl.supportRichText = true;
+        bodyLbl.horizontalOverflow = HorizontalWrapMode.Wrap;
+        var bRT = bodyLbl.GetComponent<RectTransform>();
+        bRT.anchorMin = new Vector2(0f, 0f);
+        bRT.anchorMax = new Vector2(1f, 1f);
+        bRT.offsetMin = new Vector2(10f, 8f);
+        bRT.offsetMax = new Vector2(-10f, bodyY);
     }
 
     void SetupNavigation(Button btn, Button downTarget, Button upTarget)
