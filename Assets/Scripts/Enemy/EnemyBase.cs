@@ -323,18 +323,44 @@ public class EnemyBase : MonoBehaviour
             new Color(1f, 0.4f, 0.05f), waveIndex, 1.05f);
     }
 
+    // ── Mixamo model filenames to try in priority order (mirrors GameBootstrapper) ──
+    private static readonly string[] MixamoModelNames =
+    {
+        "X Bot.fbx", "Y Bot.fbx", "xbot.fbx", "ybot.fbx",
+        "Mannequin_Base.fbx", "Mannequin.fbx", "Character.fbx",
+    };
+
+    static GameObject LoadMixamoModel()
+    {
+#if UNITY_EDITOR
+        string folder = "Assets/Art/Models/Character";
+        foreach (var name in MixamoModelNames)
+        {
+            var go = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>($"{folder}/{name}");
+            if (go != null) return go;
+        }
+        var guids = UnityEditor.AssetDatabase.FindAssets("t:Model", new[] { folder });
+        foreach (var g in guids)
+        {
+            var go = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(UnityEditor.AssetDatabase.GUIDToAssetPath(g));
+            if (go != null) return go;
+        }
+#endif
+        return null;
+    }
+
     static GameObject BuildEnemyBase(string typeName, Vector3 pos, float hp, Color accent, int wave, float scale)
     {
         GameObject root;
-        #if UNITY_EDITOR
-        var modelPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Art/Models/Character/Mannequin_Base.fbx");
+#if UNITY_EDITOR
+        var modelPrefab = LoadMixamoModel();
         if (modelPrefab != null)
         {
             root = Instantiate(modelPrefab, pos, Quaternion.identity);
             root.name = "Enemy_" + typeName;
             root.transform.localScale = Vector3.one * scale;
 
-            // Apply material color
+            // Accent-coloured emissive material so each enemy type is visually distinct
             var renderers = root.GetComponentsInChildren<Renderer>();
             foreach (var r in renderers)
             {
@@ -344,16 +370,15 @@ public class EnemyBase : MonoBehaviour
                 r.material = mat;
             }
 
-            // Animator setup
             var anim = root.GetComponent<Animator>();
             if (anim == null) anim = root.AddComponent<Animator>();
             var animSet = AnimationLibrary.LoadAnimations();
             anim.runtimeAnimatorController = AnimatorControllerBuilder.GetOrCreateController(animSet);
-            anim.applyRootMotion = false; // Prevents "pulsing" jitter
+            anim.applyRootMotion = false;
         }
         else
         {
-            // Fallback to primitive if model missing
+            // Fallback to primitive capsule when no FBX is present
             root = new GameObject("Enemy_" + typeName);
             root.transform.position = pos;
             var body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
@@ -361,10 +386,10 @@ public class EnemyBase : MonoBehaviour
             body.transform.localPosition = Vector3.up;
             body.transform.localScale = new Vector3(0.6f, 0.8f, 0.6f) * scale;
         }
-        #else
+#else
         root = new GameObject("Enemy_" + typeName);
         root.transform.position = pos;
-        #endif
+#endif
 
         // Physics
         var rb = root.GetComponent<Rigidbody>();

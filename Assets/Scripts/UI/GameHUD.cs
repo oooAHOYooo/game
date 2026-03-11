@@ -7,6 +7,7 @@ using System.Collections.Generic;
 /// GameHUD — cinematic runtime UI built entirely in code.
 /// Displays: Heart-based HP (Super Mario 64 style), Ki meters (with charge glow),
 /// wave counter, ghost badge, wave banners, wave-clear fanfare, and intermission countdown.
+/// Top bar: time played, high score, wave, orbs saved.
 /// </summary>
 public class GameHUD : MonoBehaviour
 {
@@ -14,6 +15,24 @@ public class GameHUD : MonoBehaviour
     private PlayerHealth[]     _players   = new PlayerHealth[2];
     private NinjaController[]  _ctrls     = new NinjaController[2];
     private Village            _village;
+    private WaveManager        _waveManager;
+
+    // ── High Score & Time ─────────────────────────────────────────────────
+    private float _sessionTime   = 0f;   // seconds this session
+    private float _highScore     = 0f;
+    private float _scoreAccum    = 0f;   // fractional accumulator for score ticks
+    private const float ScorePerSecond = 0.001f;
+    private const string HighScoreKey  = "HighScore";
+
+    // ── Score component buckets (for breakdown display) ───────────────────
+    private float _scoreFromTime    = 0f;  // base time ticks
+    private float _scoreFromCombo   = 0f;  // bonus from combo multiplier
+    private float _scoreFromWaves   = 0f;  // bonus from wave scaling
+    private float _scoreFromVillage = 0f;  // bonus from village health
+
+    // ── Score breakdown panel ─────────────────────────────────────────────
+    private Text  _scoreBreakdown;
+    private GameObject _breakdownPanel;
 
     // ── Heart config ──────────────────────────────────────────────────────
     private const float HP_PER_HEART    = 20f;  // each heart = 20 HP
@@ -46,6 +65,13 @@ public class GameHUD : MonoBehaviour
     private Text _ballScore;
     private static readonly Color BallScoreColor = new Color(0.1f, 0.9f, 1.0f); // Divine Cyan
 
+    // ── Top Status Bar ────────────────────────────────────────────────────
+    private Text  _topTime;
+    private Text  _topHighScore;
+    private Text  _topWave;
+    private Text  _topOrbs;
+    private bool  _newHighScore  = false;
+
     // Divider line (split-screen centre)
     private Image _centreDivider;
 
@@ -72,6 +98,7 @@ public class GameHUD : MonoBehaviour
     // ─────────────────────────────────────────────────────────────────────
     void Start()
     {
+        _highScore = PlayerPrefs.GetFloat(HighScoreKey, 0f);
         BuildHUD();
         UpdateMovesList();
         StartCoroutine(FindPlayersLoop());
@@ -92,13 +119,112 @@ public class GameHUD : MonoBehaviour
             if (_village == null)
                 _village = FindAnyObjectByType<Village>();
 
+            if (_waveManager == null)
+                _waveManager = FindAnyObjectByType<WaveManager>();
+
             yield return new WaitForSeconds(0.5f);
         }
     }
 
     void Update()
     {
+        TickScore();
         RefreshPlayerBars();
+        RefreshTopBar();
+    }
+
+    void TickScore()
+    {
+        _sessionTime += Time.deltaTime;
+
+        // ── Score multiplier components ────────────────────────────────────
+        float comboMult = 1f;
+        if (ComboSystem.Instance != null)
+        {
+            float m0 = ComboSystem.Instance.GetMultiplier(0);
+            float m1 = ComboSystem.Instance.GetMultiplier(1);
+            comboMult = Mathf.Max(m0, m1);
+        }
+
+        float waveMult = _waveManager != null ? 1f + (_waveManager.CurrentWave - 1) * 0.1f : 1f;
+        waveMult = Mathf.Max(1f, waveMult);
+
+        float villageMult = 1f;
+        if (_village != null && _village.MaxHP > 0f)
+            villageMult = 0.5f + 0.5f * (_village.CurrentHP / _village.MaxHP);
+
+        // Per-second base tick = ScorePerSecond
+        // Extra from each factor = base * (mult - 1)
+        float baseTick    = ScorePerSecond * Time.deltaTime;
+        float comboBonus  = baseTick * (comboMult - 1f);
+        float waveBonus   = baseTick * comboMult * (waveMult - 1f);
+        float villBonus   = baseTick * comboMult * waveMult * (villageMult - 1f);
+        float totalTick   = baseTick + comboBonus + waveBonus + villBonus;
+
+        _scoreAccum += totalTick;
+
+        // Award whole thousandths and distribute to buckets proportionally
+        while (_scoreAccum >= 0.001f)
+        {
+            _scoreAccum -= 0.001f;
+            _highScore       += 0.001f;
+            float total = baseTick + comboBonus + waveBonus + villBonus;
+            if (total > 0f)
+            {
+                _scoreFromTime    += 0.001f * (baseTick   / total);
+                _scoreFromCombo   += 0.001f * (comboBonus / total);
+                _scoreFromWaves   += 0.001f * (waveBonus  / total);
+                _scoreFromVillage += 0.001f * (villBonus  / total);
+            }
+            else
+            {
+                _scoreFromTime += 0.001f;
+            }
+        }
+
+        if (_highScore > PlayerPrefs.GetFloat(HighScoreKey, 0f))
+        {
+            _newHighScore = true;
+            PlayerPrefs.SetFloat(HighScoreKey, _highScore);
+        }
+    }
+
+    void RefreshTopBar()
+    {
+        if (_topTime != null)
+        {
+            int mins = (int)(_sessionTime / 60f);
+            int secs = (int)(_sessionTime % 60f);
+            _topTime.text = $"TIME  {mins:00}:{secs:00}";
+        }
+
+        if (_topHighScore != null)
+        {
+            _topHighScore.text = $"SCORE  {_highScore:F3}";
+            _topHighScore.color = _newHighScore
+                ? Color.Lerp(GameBootstrapper.PaletteGold, Color.white, Mathf.PingPong(Time.time * 4f, 1f))
+                : GameBootstrapper.PaletteGold;
+        }
+
+        if (_topWave != null && _waveManager != null)
+            _topWave.text = $"WAVE  {_waveManager.CurrentWave}";
+
+        if (_topOrbs != null && BallGoal.Instance != null)
+            _topOrbs.text = $"ORBS  {BallGoal.Instance.Score}";
+
+        // ── Breakdown panel ────────────────────────────────────────────────
+        if (_scoreBreakdown != null)
+        {
+            int orbBonus = BallGoal.Instance != null ? BallGoal.Instance.Score : 0;
+            _scoreBreakdown.text =
+                $"<b>SCORE BREAKDOWN</b>\n" +
+                $"Time       +{_scoreFromTime:F3}\n" +
+                $"Combo      +{_scoreFromCombo:F3}\n" +
+                $"Wave       +{_scoreFromWaves:F3}\n" +
+                $"Village    +{_scoreFromVillage:F3}\n" +
+                $"Orbs       ×{orbBonus}\n" +
+                $"<b>TOTAL    {_highScore:F3}</b>";
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -136,6 +262,19 @@ public class GameHUD : MonoBehaviour
         _p1Hint.alignment = TextAnchor.MiddleCenter;
         _p2Hint.alignment = TextAnchor.MiddleCenter;
 
+        // ─── Score Breakdown panel (below top bar, centre) ───────────────
+        _breakdownPanel = CreatePanel("ScoreBreakdown", new Vector2(0.35f, 0.84f), new Vector2(0.65f, 0.955f),
+            new Color(0.02f, 0.04f, 0.12f, 0.88f));
+        _scoreBreakdown = CreateLabel(_breakdownPanel, "", new Vector2(8f, -4f), 9, new Color(0.85f, 0.95f, 1f, 0.92f));
+        var sbRT = _scoreBreakdown.GetComponent<RectTransform>();
+        sbRT.anchorMin = Vector2.zero;
+        sbRT.anchorMax = Vector2.one;
+        sbRT.offsetMin = new Vector2(8f, 4f);
+        sbRT.offsetMax = new Vector2(-8f, -4f);
+        _scoreBreakdown.alignment = TextAnchor.UpperLeft;
+        _scoreBreakdown.horizontalOverflow = HorizontalWrapMode.Wrap;
+        _scoreBreakdown.verticalOverflow   = VerticalWrapMode.Overflow;
+
         // ─── Wave banner (centre top) ─────────────────────────────────────
         var bannerPanel = CreatePanel("BannerPanel", new Vector2(0.3f, 0.88f), new Vector2(0.7f, 1f),
             new Color(0f,0f,0f,0f));
@@ -156,7 +295,7 @@ public class GameHUD : MonoBehaviour
         _intermissionText.alignment = TextAnchor.MiddleCenter;
 
         // ─── Village HP hearts (centre top, below banner) ─────────────────
-        var villPanel = CreatePanel("VillagePanel", new Vector2(0.30f, 0.78f), new Vector2(0.70f, 0.87f),
+        var villPanel = CreatePanel("VillagePanel", new Vector2(0.30f, 0.65f), new Vector2(0.70f, 0.83f),
             new Color(0.03f, 0.03f, 0.08f, 0.65f));
         _villageLabel  = CreateLabel(villPanel, "🏘  VILLAGE  🏘", new Vector2(0f, -3f), 10, GameBootstrapper.PaletteGold);
         var vlrt = _villageLabel.GetComponent<RectTransform>();
@@ -174,6 +313,38 @@ public class GameHUD : MonoBehaviour
         bsrt.anchorMax = new Vector2(1f, 0.5f);
         bsrt.offsetMin = bsrt.offsetMax = Vector2.zero;
         _ballScore.alignment = TextAnchor.MiddleCenter;
+
+        // ─── Top Status Bar ───────────────────────────────────────────────
+        var topBar = CreatePanel("TopStatusBar", new Vector2(0f, 0.955f), new Vector2(1f, 1f),
+            new Color(0.02f, 0.04f, 0.12f, 0.82f));
+
+        // TIME (left)
+        _topTime = CreateLabel(topBar, "TIME  00:00", new Vector2(12f, -4f), 11, GameBootstrapper.PaletteCyan);
+        var ttRT = _topTime.GetComponent<RectTransform>();
+        ttRT.anchorMin = new Vector2(0f, 0f); ttRT.anchorMax = new Vector2(0.22f, 1f);
+        ttRT.offsetMin = new Vector2(8f, 2f); ttRT.offsetMax = new Vector2(0f, -2f);
+        _topTime.alignment = TextAnchor.MiddleLeft;
+
+        // HIGH SCORE (centre)
+        _topHighScore = CreateLabel(topBar, "SCORE  0.000", new Vector2(0f, -4f), 13, GameBootstrapper.PaletteGold);
+        var thRT = _topHighScore.GetComponent<RectTransform>();
+        thRT.anchorMin = new Vector2(0.3f, 0f); thRT.anchorMax = new Vector2(0.7f, 1f);
+        thRT.offsetMin = Vector2.zero; thRT.offsetMax = Vector2.zero;
+        _topHighScore.alignment = TextAnchor.MiddleCenter;
+
+        // WAVE (right of centre)
+        _topWave = CreateLabel(topBar, "WAVE  0", new Vector2(0f, -4f), 11, new Color(1f, 0.5f, 0.2f));
+        var twRT = _topWave.GetComponent<RectTransform>();
+        twRT.anchorMin = new Vector2(0.72f, 0f); twRT.anchorMax = new Vector2(0.87f, 1f);
+        twRT.offsetMin = Vector2.zero; twRT.offsetMax = Vector2.zero;
+        _topWave.alignment = TextAnchor.MiddleCenter;
+
+        // ORBS (far right)
+        _topOrbs = CreateLabel(topBar, "ORBS  0", new Vector2(0f, -4f), 11, BallScoreColor);
+        var toRT = _topOrbs.GetComponent<RectTransform>();
+        toRT.anchorMin = new Vector2(0.87f, 0f); toRT.anchorMax = new Vector2(1f, 1f);
+        toRT.offsetMin = Vector2.zero; toRT.offsetMax = new Vector2(-8f, 0f);
+        _topOrbs.alignment = TextAnchor.MiddleCenter;
 
         // ─── Centre divider (vertical line) ──────────────────────────────
         var dividerObj = new GameObject("CentreDivider");
@@ -396,13 +567,13 @@ public class GameHUD : MonoBehaviour
     void UpdateComboCount(Text comboText, int playerIndex)
     {
         if (comboText == null || ComboSystem.Instance == null) return;
-        
-        int combo = ComboSystem.Instance.GetComboCount(playerIndex);
-        if (combo > 1)
+
+        float combatTime = ComboSystem.Instance.GetCombatTime(playerIndex);
+        if (combatTime >= 1f)
         {
             float multi = ComboSystem.Instance.GetMultiplier(playerIndex);
-            comboText.text = $"COMBO {combo}  (x{multi:F1} KI)";
-            comboText.color = multi >= GameSettings.ComboTier3Multiplier ? GameBootstrapper.PaletteMagenta : 
+            comboText.text = $"IN COMBAT  {combatTime:F1}s  (x{multi:F1})";
+            comboText.color = multi >= GameSettings.ComboTier3Multiplier ? GameBootstrapper.PaletteMagenta :
                               multi >= GameSettings.ComboTier2Multiplier ? GameBootstrapper.PaletteCyan : GameBootstrapper.PaletteGold;
         }
         else

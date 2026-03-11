@@ -66,15 +66,15 @@ public static class GameSettings
     public static float ImpactAudioMinPitch = 0.8f;
     public static float ImpactAudioMaxPitch = 1.2f;
 
-    // ── Combo System ──────────────────────────────────────────────────────
-    public static float ComboDecayTime = 3.0f;
-    public static int ComboTier1Threshold = 3;
+    // ── Combo System (time-based: seconds of sustained combat) ────────────
+    public static float ComboDecayTime = 3.0f;       // seconds without a hit before streak resets
+    public static float ComboTier1Threshold = 3f;    // 3s  → 1.5× multiplier
     public static float ComboTier1Multiplier = 1.5f;
-    public static int ComboTier2Threshold = 6;
+    public static float ComboTier2Threshold = 8f;    // 8s  → 2.0×
     public static float ComboTier2Multiplier = 2.0f;
-    public static int ComboTier3Threshold = 10;
+    public static float ComboTier3Threshold = 15f;   // 15s → 3.0×
     public static float ComboTier3Multiplier = 3.0f;
-    public static int ComboWorshipThreshold = 10;
+    public static float ComboWorshipThreshold = 10f; // 10s sustained → villagers celebrate
     public static float ComboWorshipRadius = 25f;
 
     // ── Village Fire System ───────────────────────────────────────────────

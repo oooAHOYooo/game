@@ -293,41 +293,81 @@ public class GameBootstrapper : MonoBehaviour
     }
 
     #if UNITY_EDITOR
+    // ── Mixamo model filenames to try in priority order ───────────────────
+    // Drop any of these into Assets/Art/Models/Character/ and it will be used.
+    private static readonly string[] MixamoModelNames =
+    {
+        "X Bot.fbx", "Y Bot.fbx", "xbot.fbx", "ybot.fbx",
+        "Mannequin_Base.fbx", "Mannequin.fbx", "Character.fbx",
+    };
+
     /// <summary>
-    /// Try to build an animated character using the Mannequin model and loaded animations.
-    /// Returns null if the model can't be loaded (falls back to primitives).
+    /// Find the first available Mixamo model in the Character folder.
+    /// </summary>
+    static GameObject LoadMixamoModel()
+    {
+        string folder = "Assets/Art/Models/Character";
+        foreach (var name in MixamoModelNames)
+        {
+            var go = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>($"{folder}/{name}");
+            if (go != null)
+            {
+                Debug.Log($"[Mixamo] Using model: {name}");
+                return go;
+            }
+        }
+        // Last resort: grab the first FBX in the folder
+        var guids = UnityEditor.AssetDatabase.FindAssets("t:Model", new[] { folder });
+        foreach (var g in guids)
+        {
+            var go = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(UnityEditor.AssetDatabase.GUIDToAssetPath(g));
+            if (go != null) return go;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Find a bone by checking Mixamo-prefixed names and bare names.
+    /// Mixamo rigs name bones as "mixamorig:RightHand" — the postprocessor strips
+    /// the prefix at import time, but we handle both for safety.
+    /// </summary>
+    static Transform FindMixamoBone(Transform root, params string[] bareNames)
+    {
+        foreach (var t in root.GetComponentsInChildren<Transform>())
+        {
+            string lower = t.name.ToLower().Replace("mixamorig:", "");
+            foreach (var name in bareNames)
+                if (lower == name.ToLower()) return t;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Try to build an animated character using a Mixamo T-pose model.
+    /// Returns null if no model can be loaded (falls back to primitives).
     /// </summary>
     GameObject TryBuildAnimatedNinja(string playerName, Vector3 spawnPos, Color bodyColor, bool isGhost, int playerIndex)
     {
-        // Load the character model FBX
-        var modelPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Art/Models/Character/Mannequin_Base.fbx");
+        var modelPrefab = LoadMixamoModel();
         if (modelPrefab == null)
         {
-            Debug.LogWarning($"Mannequin_Base.fbx not found, falling back to primitives for {playerName}");
+            Debug.LogWarning($"[Mixamo] No character FBX found in Assets/Art/Models/Character/, falling back to primitives for {playerName}");
             return null;
         }
 
-        // Instantiate the model
         var root = Instantiate(modelPrefab, spawnPos, Quaternion.identity);
         root.name = playerName;
 
-        // Apply branded material based on player
         ApplyPlayerBrandMaterial(root, playerIndex);
 
-        // Load animations
         var animSet = AnimationLibrary.LoadAnimations();
 
-        // Add Animator component
         var animator = root.GetComponent<Animator>();
-        if (animator == null)
-            animator = root.AddComponent<Animator>();
+        if (animator == null) animator = root.AddComponent<Animator>();
+        animator.runtimeAnimatorController =
+            AnimatorControllerBuilder.CreateController(animSet, "Assets/Art/Animator/PlayerController.controller");
+        animator.applyRootMotion = false;
 
-        // Build or load animation controller
-        var controller = AnimatorControllerBuilder.CreateController(animSet, "Assets/Art/Animator/PlayerController.controller");
-        animator.runtimeAnimatorController = controller;
-        animator.applyRootMotion = false; // Prevents "pulsing" jitter
-
-        // Add physics
         var rb = root.GetComponent<Rigidbody>();
         if (rb == null) rb = root.AddComponent<Rigidbody>();
         rb.mass = 70f;
@@ -341,46 +381,31 @@ public class GameBootstrapper : MonoBehaviour
         col.radius = 0.4f;
         col.center = new Vector3(0, 1f, 0);
 
-        // Add NinjaController
         var ctrl = root.GetComponent<NinjaController>();
         if (ctrl == null) ctrl = root.AddComponent<NinjaController>();
         ctrl.PlayerIndex = playerIndex;
-        ctrl.IsGhost = isGhost;
-        ctrl.BodyColor = bodyColor;
+        ctrl.IsGhost     = isGhost;
+        ctrl.BodyColor   = bodyColor;
 
-        // Add weapon holder (try to find right hand bone for animations)
-        Transform hand = null;
-        var allTransforms = root.GetComponentsInChildren<Transform>();
-        foreach(var t in allTransforms) {
-            if (t.name.ToLower().Contains("righthand") || t.name.ToLower().Contains("hand.r")) {
-                hand = t;
-                break;
-            }
-        }
+        // ── Weapon holder — attach to Mixamo right hand bone ─────────────
+        Transform hand = FindMixamoBone(root.transform, "RightHand", "Hand_R", "hand_r");
 
         var weaponHolder = root.transform.Find("WeaponHolder");
         if (weaponHolder == null)
         {
             weaponHolder = new GameObject("WeaponHolder").transform;
             weaponHolder.SetParent(hand != null ? hand : root.transform);
-            weaponHolder.localPosition = hand != null ? Vector3.zero : new Vector3(0.5f, 1.2f, 0);
-            weaponHolder.localRotation = Quaternion.Euler(90, 0, 0); // Point sword 'forward' relative to palm
+            weaponHolder.localPosition = Vector3.zero;
+            weaponHolder.localRotation = Quaternion.Euler(90, 0, 0);
         }
         ctrl.WeaponHolder = weaponHolder;
+        ctrl.SwordRoot    = BuildWeapon(weaponHolder, false, bodyColor);
 
-        // Build initial weapon
-        var sword = BuildWeapon(weaponHolder, false, bodyColor);
-        ctrl.SwordRoot = sword;
-
-        // Add other components
         root.AddComponent<EnvironmentInteractor>();
         var health = root.AddComponent<PlayerHealth>();
         health.PlayerIndex = playerIndex;
 
-        // Aura VFX – Removed as per user request
-        // BuildAuraVFX(root.transform, bodyColor, isGhost);
-
-        Debug.Log($"[GameBootstrapper] Built animated ninja {playerName} with Mannequin model");
+        Debug.Log($"[GameBootstrapper] Built animated ninja {playerName} using Mixamo T-pose model");
         return root;
     }
     #endif
