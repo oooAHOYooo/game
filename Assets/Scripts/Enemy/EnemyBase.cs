@@ -214,6 +214,11 @@ public class EnemyBase : MonoBehaviour
         var vill = FindAnyObjectByType<Village>();
         if (vill != null) vill.OnEnemyKilledNearVillage(transform.position);
 
+        // Sound
+        var ai = GetComponent<EnemyAI>();
+        bool isBoss = ai != null && (ai.EnemyType == "Boss" || ai.EnemyType == "Brute");
+        SoundManager.PlayEnemyDeath(isBoss, transform.position);
+
         // Hide hearts
         if (_heartCanvas != null)
             _heartCanvas.gameObject.SetActive(false);

@@ -56,6 +56,7 @@ public class PlayerHealth : MonoBehaviour
     System.Collections.IEnumerator Die()
     {
         IsAlive = false;
+        SoundManager.PlayPlayerDeath(transform.position);
 
         // Flash & shrink on death
         var renderers = GetComponentsInChildren<Renderer>();
@@ -78,5 +79,6 @@ public class PlayerHealth : MonoBehaviour
         CurrentHP            = MaxHP * 0.6f; // respawn at 60% HP
         IsAlive              = true;
         gameObject.SetActive(true);
+        SoundManager.PlayRespawn(transform.position);
     }
 }

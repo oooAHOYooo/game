@@ -22,6 +22,8 @@ public class LaserBeam : MonoBehaviour
     public void Fire(float kiAtFire)
     {
         bool isUltra = kiAtFire >= _ultraBeamKiThreshold;
+        SoundManager.PlayLaserCharge(transform.position);
+        SoundManager.PlayLaserFire(isUltra, transform.position);
         StartCoroutine(SpawnBeam(isUltra, kiAtFire));
     }
 

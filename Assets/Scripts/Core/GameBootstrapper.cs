@@ -61,6 +61,7 @@ public class GameBootstrapper : MonoBehaviour
         var systemsObj = new GameObject("Systems");
         systemsObj.transform.SetParent(transform);
         systemsObj.AddComponent<ImpactFeedback>();
+        systemsObj.AddComponent<SoundManager>();
         systemsObj.AddComponent<DayNightCycle>();
         systemsObj.AddComponent<ComboSystem>();
         systemsObj.AddComponent<VillageFireSystem>();

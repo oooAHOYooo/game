@@ -481,6 +481,9 @@ public class Village : MonoBehaviour
         if (_isDestroyed) return;
         CurrentHP = Mathf.Max(0, CurrentHP - amount);
 
+        // Alarm sound
+        SoundManager.PlayVillageDamage(Centre);
+
         // Flash totem red
         if (_totem != null)
         {

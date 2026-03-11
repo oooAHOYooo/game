@@ -74,6 +74,9 @@ public class WaveManager : MonoBehaviour
 
         var enemyList = BuildWaveComposition(waveIndex, initialSpawn);
 
+        // Sound alert
+        SoundManager.PlayWaveStart();
+
         // Notify HUD
         var hud = FindAnyObjectByType<GameHUD>();
         if (hud != null) hud.ShowWaveBanner(waveIndex + 1);
@@ -239,14 +242,16 @@ public class WaveManager : MonoBehaviour
 
         _waveActive = false;
 
-        // Celebration VFX
+        // Celebration VFX + sound
         SpawnClearVFX();
+        SoundManager.PlayWaveClear();
 
         // Villagers celebrate!
         if (IslandVillage != null)
         {
             var villagers = FindObjectsByType<Villager>(FindObjectsSortMode.None);
             foreach (var v in villagers) { v.SetPanic(false); v.Celebrate(4f); }
+            SoundManager.PlayVillagerCheer();
         }
 
         var hud = FindAnyObjectByType<GameHUD>();
