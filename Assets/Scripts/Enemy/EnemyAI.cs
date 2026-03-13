@@ -48,6 +48,15 @@ public class EnemyAI : MonoBehaviour
     // ── Mimic state ───────────────────────────────────────────────────────
     private int _mimicComboIndex = 0;
 
+    // ── SkyBomb state ─────────────────────────────────────────────────────
+    private bool        _isSkyDropping    = false;
+    private bool        _skyDropFalling   = false;   // true once we've started descending fast
+    private GameObject  _skyDropTrailVFX;
+    public  const float SKY_SPAWN_HEIGHT  = 220f;
+    private const float SKYBOMB_FIRE_RADIUS = 8f;
+    private const float SKYBOMB_FIRE_DAMAGE = 30f;
+    private const float FIRE_ZONE_DURATION  = 12f;
+
     // ─────────────────────────────────────────────────────────────────────
     void Awake()
     {
@@ -74,11 +83,31 @@ public class EnemyAI : MonoBehaviour
         // Cache village for arsonists
         if (EnemyType == "Arsonist")
             _village = FindAnyObjectByType<Village>();
+
+        // SkyBomb: begin sky-drop if spawned high up
+        if (EnemyType == "SkyBomb")
+        {
+            MoveSpeed = 7f; AttackCooldown = 1.4f; AttackRange = 2.5f;
+            _isSkyDropping = true;
+            _rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
+            _rb.useGravity   = true;
+            SpawnSkyDropTrail();
+        }
     }
 
     void Update()
     {
         if (!_base.IsAlive) return;
+
+        // SkyBombs are sky-dropping — skip normal AI until landed
+        if (_isSkyDropping)
+        {
+            UpdateSkyDrop();
+            return;
+        }
+
+        // All enemies are confined to the island
+        EnforceIslandBounds();
 
         // Arsonists have their own behaviour
         if (EnemyType == "Arsonist")
@@ -185,9 +214,14 @@ public class EnemyAI : MonoBehaviour
         float targetSpeed = horizontalSpeed / MoveSpeed;
         _speedBlend = Mathf.Lerp(_speedBlend, targetSpeed > 0.1f ? targetSpeed : 0f, Time.deltaTime * 5f);
 
-        _anim.SetFloat("Speed", _speedBlend);
-        _anim.SetBool("IsFlying", _base.IsFlying);
+        bool grounded = Physics.Raycast(transform.position + Vector3.up * 0.1f, Vector3.down, 0.35f);
+
+        _anim.SetFloat("Speed",      _speedBlend);
+        _anim.SetBool("IsGrounded",  grounded);
+        _anim.SetBool("IsFlying",    _base.IsFlying);
         _anim.SetBool("IsAttacking", _isActing);
+        // Enemies cycle through punch/kick so their attacks look varied
+        _anim.SetInteger("AttackType", _isActing ? (Mathf.FloorToInt(Time.time * 2f) % 4 + 1) : 0);
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -741,6 +775,195 @@ public class EnemyAI : MonoBehaviour
         dir.y = 0;
         if (dir.sqrMagnitude < 0.01f) return;
         transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(dir), 6f * Time.deltaTime);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // ISLAND BOUNDS — enemies cannot leave the island
+    // ─────────────────────────────────────────────────────────────────────
+    void EnforceIslandBounds()
+    {
+        const float BOUNDARY = 148f;
+        Vector2 horiz = new Vector2(transform.position.x, transform.position.z);
+        float dist = horiz.magnitude;
+        if (dist <= BOUNDARY) return;
+
+        Vector3 inward = new Vector3(-horiz.normalized.x, 0, -horiz.normalized.y);
+        _rb.AddForce(inward * ((dist - BOUNDARY) * 30f + 50f), ForceMode.Force);
+
+        if (dist > GameSettings.IslandRadius)
+        {
+            Vector2 clamped = horiz.normalized * GameSettings.IslandRadius;
+            _rb.position = new Vector3(clamped.x, _rb.position.y, clamped.y);
+            Vector3 vel = _rb.linearVelocity;
+            float outward = Vector2.Dot(new Vector2(vel.x, vel.z), horiz.normalized);
+            if (outward > 0f)
+            {
+                vel.x -= horiz.normalized.x * outward;
+                vel.z -= horiz.normalized.y * outward;
+                _rb.linearVelocity = vel;
+            }
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // SKY-BOMB FIREBALL DROP
+    // ─────────────────────────────────────────────────────────────────────
+    void FixedUpdate()
+    {
+        if (_isSkyDropping)
+            _rb.AddForce(Vector3.down * 28f, ForceMode.Acceleration);
+    }
+
+    void UpdateSkyDrop()
+    {
+        float velY = _rb.linearVelocity.y;
+        if (!_skyDropFalling && velY < -10f)
+            _skyDropFalling = true;
+
+        // Landed when falling fast then suddenly slowed (hit ground)
+        if (_skyDropFalling && velY > -2f && transform.position.y < 25f)
+        {
+            OnSkyBombLanded();
+            _isSkyDropping = false;
+        }
+    }
+
+    void OnSkyBombLanded()
+    {
+        if (_skyDropTrailVFX != null) { Destroy(_skyDropTrailVFX); _skyDropTrailVFX = null; }
+
+        Vector3 pos = transform.position;
+
+        // Camera shake & danger alert
+        SplitScreenCamera.ShakeCamera(0, 0.8f, 0.6f);
+        SplitScreenCamera.ShakeCamera(1, 0.8f, 0.6f);
+        GameBootstrapper.SpawnAlert(transform, true);
+        SoundManager.PlayWaveStart(); // reuse the dramatic BOOM sound
+
+        // Impact shockwave VFX
+        SpawnImpactVFX(pos);
+
+        // Damage players in radius
+        HitPlayersInRange(SKYBOMB_FIRE_RADIUS, SKYBOMB_FIRE_DAMAGE);
+
+        // Leave a persistent fire zone on the ground
+        SpawnFireZone(pos);
+
+        // Now fight like a normal grunt
+        EnemyType = "Grunt";
+    }
+
+    void SpawnImpactVFX(Vector3 pos)
+    {
+        var obj  = new GameObject("SkyBombImpact");
+        obj.transform.position = pos;
+        var ps   = obj.AddComponent<ParticleSystem>();
+        var main = ps.main;
+        main.duration     = 0.5f;
+        main.loop         = false;
+        main.startLifetime = new ParticleSystem.MinMaxCurve(0.5f, 1.5f);
+        main.startSpeed    = new ParticleSystem.MinMaxCurve(8f, 30f);
+        main.startSize     = new ParticleSystem.MinMaxCurve(0.3f, 1.2f);
+        main.startColor    = new ParticleSystem.MinMaxGradient(
+            new Color(1f, 0.4f, 0.05f), new Color(1f, 0.9f, 0.1f));
+        main.gravityModifier = 0.3f;
+        main.maxParticles    = 200;
+        var em = ps.emission;
+        em.SetBursts(new[] { new ParticleSystem.Burst(0f, 180) });
+        em.rateOverTime = 0;
+        var shape = ps.shape;
+        shape.shapeType = ParticleSystemShapeType.Sphere;
+        shape.radius = 2f;
+        ps.Play();
+
+        var flash = new GameObject("ImpactFlash");
+        flash.transform.position = pos;
+        var l = flash.AddComponent<Light>();
+        l.type = LightType.Point; l.color = new Color(1f, 0.6f, 0.1f);
+        l.intensity = 600000f; l.range = 30f;
+        Destroy(flash, 0.12f);
+
+        Destroy(obj, 3f);
+    }
+
+    void SpawnFireZone(Vector3 pos)
+    {
+        var zone = new GameObject("FireZone");
+        pos.y = IslandGenerator.WaterLevel + 0.05f;
+        zone.transform.position = pos;
+
+        // Visible fire ring
+        var ps   = zone.AddComponent<ParticleSystem>();
+        var main = ps.main;
+        main.loop          = true;
+        main.duration      = 1f;
+        main.startLifetime = new ParticleSystem.MinMaxCurve(0.6f, 1.4f);
+        main.startSpeed    = new ParticleSystem.MinMaxCurve(1f, 4f);
+        main.startSize     = new ParticleSystem.MinMaxCurve(0.3f, 0.9f);
+        main.startColor    = new ParticleSystem.MinMaxGradient(
+            new Color(1f, 0.35f, 0.05f), new Color(1f, 0.7f, 0.1f));
+        main.gravityModifier = -0.3f;
+        main.simulationSpace = ParticleSystemSimulationSpace.World;
+        main.maxParticles    = 300;
+        var em = ps.emission;
+        em.rateOverTime = 120f;
+        var shape = ps.shape;
+        shape.shapeType = ParticleSystemShapeType.Cone;
+        shape.angle = 30f; shape.radius = SKYBOMB_FIRE_RADIUS * 0.7f;
+        ps.Play();
+
+        // Damage trigger sphere
+        var triggerObj = new GameObject("FireZoneTrigger");
+        triggerObj.transform.SetParent(zone.transform);
+        triggerObj.transform.localPosition = Vector3.zero;
+        var sc = triggerObj.AddComponent<SphereCollider>();
+        sc.isTrigger = true;
+        sc.radius = SKYBOMB_FIRE_RADIUS;
+        triggerObj.AddComponent<FireZoneDamage>();
+
+        // Point light flicker
+        var lightObj = new GameObject("ZoneLight");
+        lightObj.transform.SetParent(zone.transform);
+        lightObj.transform.localPosition = Vector3.zero;
+        var fl = lightObj.AddComponent<Light>();
+        fl.type = LightType.Point; fl.color = new Color(1f, 0.5f, 0.1f);
+        fl.intensity = 800f; fl.range = SKYBOMB_FIRE_RADIUS * 2f;
+
+        Destroy(zone, FIRE_ZONE_DURATION);
+    }
+
+    void SpawnSkyDropTrail()
+    {
+        _skyDropTrailVFX = new GameObject("SkyDropTrail");
+        _skyDropTrailVFX.transform.SetParent(transform);
+        _skyDropTrailVFX.transform.localPosition = Vector3.zero;
+
+        var ps   = _skyDropTrailVFX.AddComponent<ParticleSystem>();
+        var main = ps.main;
+        main.loop          = true;
+        main.duration      = 1f;
+        main.startLifetime = new ParticleSystem.MinMaxCurve(0.3f, 0.7f);
+        main.startSpeed    = new ParticleSystem.MinMaxCurve(2f, 6f);
+        main.startSize     = new ParticleSystem.MinMaxCurve(0.4f, 1f);
+        main.startColor    = new ParticleSystem.MinMaxGradient(
+            new Color(1f, 0.4f, 0.05f), new Color(1f, 0.9f, 0.15f));
+        main.gravityModifier = 0.4f;
+        main.simulationSpace = ParticleSystemSimulationSpace.World;
+        main.maxParticles    = 200;
+        var em = ps.emission;
+        em.rateOverTime = 80f;
+        var shape = ps.shape;
+        shape.shapeType = ParticleSystemShapeType.Sphere;
+        shape.radius = 0.5f;
+        ps.Play();
+
+        // Glow light on the falling fireball
+        var lObj = new GameObject("DropLight");
+        lObj.transform.SetParent(_skyDropTrailVFX.transform);
+        lObj.transform.localPosition = Vector3.zero;
+        var l = lObj.AddComponent<Light>();
+        l.type = LightType.Point; l.color = new Color(1f, 0.55f, 0.1f);
+        l.intensity = 300000f; l.range = 20f;
     }
 
     void FindTarget()

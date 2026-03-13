@@ -328,6 +328,18 @@ public class EnemyBase : MonoBehaviour
             new Color(1f, 0.4f, 0.05f), waveIndex, 1.05f);
     }
 
+    /// <summary>
+    /// SkyBomb: spawns high in the sky and drops like a fireball.
+    /// Leaves a fire zone on landing, then fights as a normal grunt.
+    /// </summary>
+    public static GameObject BuildSkyBomb(Vector3 landPos, int waveIndex)
+    {
+        // Place the spawn point directly above the intended landing zone
+        Vector3 skyPos = new Vector3(landPos.x, EnemyAI.SKY_SPAWN_HEIGHT, landPos.z);
+        return BuildEnemyBase("SkyBomb", skyPos, 55f,
+            new Color(1f, 0.35f, 0.05f), waveIndex, 1.1f);
+    }
+
     // ── Mixamo model filenames to try in priority order (mirrors GameBootstrapper) ──
     private static readonly string[] MixamoModelNames =
     {
@@ -392,8 +404,33 @@ public class EnemyBase : MonoBehaviour
             body.transform.localScale = new Vector3(0.6f, 0.8f, 0.6f) * scale;
         }
 #else
-        root = new GameObject("Enemy_" + typeName);
-        root.transform.position = pos;
+        // Runtime build: load the same prefab created by CharacterSetup editor tool
+        var runtimePrefab = Resources.Load<GameObject>("Characters/PlayerAnimated");
+        if (runtimePrefab != null)
+        {
+            root = Instantiate(runtimePrefab, pos, Quaternion.identity);
+            root.name = "Enemy_" + typeName;
+            root.transform.localScale = Vector3.one * scale;
+
+            var renderers = root.GetComponentsInChildren<Renderer>();
+            foreach (var r in renderers)
+            {
+                var mat = new Material(GameBootstrapper.GetHDRPLitShader());
+                mat.color = new Color(0.05f, 0.05f, 0.08f);
+                GameBootstrapper.SetHDRPEmission(mat, accent, 1.5f);
+                r.material = mat;
+            }
+
+            var anim = root.GetComponent<Animator>();
+            if (anim == null) anim = root.AddComponent<Animator>();
+            var ctrl = Resources.Load<RuntimeAnimatorController>("Animator/PlayerController");
+            if (ctrl != null) { anim.runtimeAnimatorController = ctrl; anim.applyRootMotion = false; }
+        }
+        else
+        {
+            root = new GameObject("Enemy_" + typeName);
+            root.transform.position = pos;
+        }
 #endif
 
         // Physics

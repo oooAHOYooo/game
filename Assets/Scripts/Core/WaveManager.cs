@@ -103,12 +103,17 @@ public class WaveManager : MonoBehaviour
     {
         Vector3 spawnPos = GetSpawnPosition(index, total);
 
+        // SkyBombs land on the island, not the water edge
+        if (type == "SkyBomb")
+            spawnPos = GetSkyBombLandingPosition();
+
         GameObject enemyGO = type switch
         {
             "Elite"    => EnemyBase.BuildShadowArcher(spawnPos, waveIndex),
             "Brute"    => EnemyBase.BuildBerserker(spawnPos, waveIndex),
             "Boss"     => EnemyBase.BuildMiniBoss(spawnPos, waveIndex),
             "Arsonist" => EnemyBase.BuildArsonist(spawnPos, waveIndex),
+            "SkyBomb"  => EnemyBase.BuildSkyBomb(spawnPos, waveIndex),
             _          => EnemyBase.BuildFootSoldier(spawnPos, waveIndex)
         };
 
@@ -262,7 +267,15 @@ public class WaveManager : MonoBehaviour
 
     IEnumerator Intermission()
     {
-        if (DayNightCycle.Instance != null) DayNightCycle.Instance.SetPhase(DayNightCycle.Phase.Day);
+        // New day rises — switch to the next day's color palette
+        if (DayNightCycle.Instance != null)
+        {
+            DayNightCycle.Instance.SetDayTheme(CurrentWave);
+            DayNightCycle.Instance.SetPhase(DayNightCycle.Phase.Day);
+        }
+
+        // Big "NEW DAY" banner with screen flash
+        SpawnNewDayCelebration(CurrentWave + 1);
 
         var hud = FindAnyObjectByType<GameHUD>();
         for (int i = Mathf.RoundToInt(IntermissionDuration); i > 0; i--)
@@ -270,7 +283,62 @@ public class WaveManager : MonoBehaviour
             if (hud != null) hud.ShowIntermission(i);
             yield return new WaitForSeconds(1f);
         }
+    }
 
+    void SpawnNewDayCelebration(int dayNumber)
+    {
+        // Screen-wide color flash
+        StartCoroutine(DayCelebrationFlash(dayNumber));
+
+        // Big ring of celebration particles
+        Color dayColor = DayNightCycle.GetDayColor(dayNumber);
+        for (int i = 0; i < 8; i++)
+        {
+            float angle = i / 8f * Mathf.PI * 2f;
+            float r = 8f + i * 2f;
+            Vector3 pos = new Vector3(Mathf.Cos(angle) * r, 3f, Mathf.Sin(angle) * r);
+
+            var obj  = new GameObject("DayCelebVFX");
+            obj.transform.position = pos;
+            var ps   = obj.AddComponent<ParticleSystem>();
+            var main = ps.main;
+            main.duration      = 0.5f;
+            main.loop          = false;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(0.8f, 2f);
+            main.startSpeed    = new ParticleSystem.MinMaxCurve(6f, 20f);
+            main.startSize     = new ParticleSystem.MinMaxCurve(0.2f, 0.6f);
+            main.startColor    = new ParticleSystem.MinMaxGradient(dayColor, GameBootstrapper.PaletteGold);
+            main.gravityModifier = -0.2f;
+            main.maxParticles    = 100;
+            var em = ps.emission;
+            em.SetBursts(new[] { new ParticleSystem.Burst(0f, 80) });
+            em.rateOverTime = 0;
+            ps.Play();
+
+            // Rising light pillar
+            var lObj = new GameObject("DayLight");
+            lObj.transform.SetParent(obj.transform);
+            var l = lObj.AddComponent<Light>();
+            l.type = LightType.Spot; l.color = dayColor;
+            l.intensity = 400000f; l.range = 80f;
+            l.spotAngle = 8f;
+            lObj.transform.rotation = Quaternion.Euler(-90, 0, 0);
+
+            Destroy(obj, 3f);
+        }
+    }
+
+    IEnumerator DayCelebrationFlash(int day)
+    {
+        // Three quick flashes of the day color via ambient light
+        Color dayColor = DayNightCycle.GetDayColor(day);
+        for (int i = 0; i < 3; i++)
+        {
+            RenderSettings.ambientLight = dayColor * 0.6f;
+            yield return new WaitForSeconds(0.1f);
+            RenderSettings.ambientLight = new Color(0.1f, 0.15f, 0.2f);
+            yield return new WaitForSeconds(0.15f);
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -299,27 +367,32 @@ public class WaveManager : MonoBehaviour
         }
         else if (waveIndex == 2)
         {
-            // Wave 3: grunts + elites + 1 arsonist
+            // Wave 3: grunts + elites + 1 arsonist + first SkyBomb drops!
             list.Add("Arsonist");
             list.Add("Elite");
-            for (int i = 2; i < count; i++) list.Add("Grunt");
+            list.Add("SkyBomb");
+            for (int i = 3; i < count; i++) list.Add("Grunt");
         }
         else if (waveIndex == 3)
         {
-            // Wave 4: brute + elites + arsonists
+            // Wave 4: brute + elites + arsonists + sky bombs
             list.Add("Brute");
             list.Add("Arsonist");
+            list.Add("SkyBomb");
+            list.Add("SkyBomb");
             list.Add("Elite");
             list.Add("Elite");
-            for (int i = 4; i < count; i++) list.Add("Grunt");
+            for (int i = 6; i < count; i++) list.Add("Grunt");
         }
         else
         {
-            // Wave 5+: boss + escalating complexity + always arsonists
+            // Wave 5+: boss + escalating complexity + arsonists + sky bombs
             list.Add("Boss");
-            int arsonists = Mathf.Min(waveIndex - 2, count / 3); // more arsonists over time
+            int arsonists = Mathf.Min(waveIndex - 2, count / 4);
+            int skyBombs  = Mathf.Min(waveIndex - 2, count / 4);
             for (int i = 0; i < arsonists; i++) list.Add("Arsonist");
-            int remaining = count - 1 - arsonists;
+            for (int i = 0; i < skyBombs;  i++) list.Add("SkyBomb");
+            int remaining = count - 1 - arsonists - skyBombs;
             int elites    = remaining / 3;
             int brutes    = remaining / 5;
             for (int i = 0; i < brutes; i++)  list.Add("Brute");
@@ -359,6 +432,18 @@ public class WaveManager : MonoBehaviour
             pos.y = hit.point.y + 0.5f;
         else
             pos.y = 2f;
+        return pos;
+    }
+
+    /// <summary>Random point on the island surface — used as the SkyBomb landing target.</summary>
+    Vector3 GetSkyBombLandingPosition()
+    {
+        float angle = Random.Range(0f, Mathf.PI * 2f);
+        float r     = Random.Range(20f, GameSettings.IslandRadius * 0.7f);
+        Vector3 pos = new Vector3(Mathf.Cos(angle) * r, 200f, Mathf.Sin(angle) * r);
+        // Snap y to terrain so the landing zone fire looks right
+        if (Physics.Raycast(pos + Vector3.up * 50f, Vector3.down, out RaycastHit hit, 300f))
+            pos.y = hit.point.y;
         return pos;
     }
 

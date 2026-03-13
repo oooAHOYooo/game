@@ -66,6 +66,55 @@ public class DayNightCycle : MonoBehaviour
             _campfires.Add(fireLight);
     }
 
+    // ── Day themes — each wave clear brings a visually distinct new day ──
+    // Cycle: golden dawn → cyan tropics → violet dusk → emerald forest →
+    //        crimson volcano → deep indigo → back to golden.
+    private static readonly Color[] DayAmbients = {
+        new Color(0.10f, 0.15f, 0.20f),  // Day 1: classic blue night→dawn
+        new Color(0.05f, 0.18f, 0.18f),  // Day 2: teal tropics
+        new Color(0.12f, 0.05f, 0.18f),  // Day 3: violet dusk
+        new Color(0.04f, 0.14f, 0.06f),  // Day 4: emerald forest
+        new Color(0.18f, 0.04f, 0.02f),  // Day 5: crimson volcano
+        new Color(0.04f, 0.04f, 0.16f),  // Day 6: deep indigo
+    };
+    private static readonly Color[] DaySunColors = {
+        new Color(1.0f, 0.90f, 0.70f),   // warm gold
+        new Color(0.4f, 1.00f, 0.90f),   // cyan-teal
+        new Color(0.8f, 0.50f, 1.00f),   // violet
+        new Color(0.5f, 1.00f, 0.50f),   // green
+        new Color(1.0f, 0.35f, 0.15f),   // volcanic orange
+        new Color(0.5f, 0.60f, 1.00f),   // indigo blue
+    };
+    private static readonly Color[] DayFogColors = {
+        new Color(0.15f, 0.25f, 0.35f),
+        new Color(0.05f, 0.25f, 0.25f),
+        new Color(0.18f, 0.08f, 0.28f),
+        new Color(0.05f, 0.18f, 0.07f),
+        new Color(0.25f, 0.06f, 0.03f),
+        new Color(0.06f, 0.06f, 0.22f),
+    };
+
+    public void SetDayTheme(int waveJustCompleted)
+    {
+        int idx = waveJustCompleted % DayAmbients.Length;
+        // Override the Day phase target colours so the transition looks fresh
+        // (SetPhase(Day) is called right after, which will use these targets)
+        _pendingDayAmbient = DayAmbients[idx];
+        _pendingDaySun     = DaySunColors[idx];
+        _pendingDayFog     = DayFogColors[idx];
+    }
+
+    /// <summary>Returns the accent color for a given day number (for VFX).</summary>
+    public static Color GetDayColor(int dayNumber)
+    {
+        int idx = (dayNumber - 1) % DaySunColors.Length;
+        return DaySunColors[idx < 0 ? 0 : idx];
+    }
+
+    private Color? _pendingDayAmbient;
+    private Color? _pendingDaySun;
+    private Color? _pendingDayFog;
+
     public void SetPhase(Phase newPhase, bool immediate = false)
     {
         CurrentPhase = newPhase;
@@ -74,15 +123,18 @@ public class DayNightCycle : MonoBehaviour
         {
             case Phase.Day: // Intermission
                 _targetSunRot = Quaternion.Euler(35f, -40f, 0);
-                _targetSunColor = new Color(1.0f, 0.9f, 0.7f);
+                _targetSunColor = _pendingDaySun     ?? new Color(1.0f, 0.9f, 0.7f);
                 _targetSunIntensity = 80000f;
-                
+
                 _targetFillColor = new Color(0.4f, 0.6f, 1.0f);
                 _targetFillIntensity = 15000f;
-                
-                _targetAmbient = new Color(0.1f, 0.15f, 0.2f);
-                _targetFog = new Color(0.15f, 0.25f, 0.35f);
-                _lerpSpeed = 0.5f; // Slow transition to day
+
+                _targetAmbient = _pendingDayAmbient  ?? new Color(0.1f, 0.15f, 0.2f);
+                _targetFog     = _pendingDayFog      ?? new Color(0.15f, 0.25f, 0.35f);
+                _lerpSpeed = 0.5f;
+
+                // Clear the overrides so they don't persist unexpectedly
+                _pendingDaySun = null; _pendingDayAmbient = null; _pendingDayFog = null;
                 break;
 
             case Phase.Sunset: // Wave warning

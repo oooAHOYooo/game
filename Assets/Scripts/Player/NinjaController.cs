@@ -82,6 +82,7 @@ public class NinjaController : MonoBehaviour
     private float _diveBombOriginY   = 0f;
     private float _totemLaunchCooldown = 0f;
 
+    private int         _attackComboStep  = 0; // cycles 1-4 to drive animator AttackType
     private bool        _isTransforming;
     public  bool        IsTransforming => _isTransforming;
     private float       _transformTimer;
@@ -222,8 +223,9 @@ public class NinjaController : MonoBehaviour
         _speedBlend = Mathf.Lerp(_speedBlend, horizontalSpeed > 0.1f ? targetSpeedScale : 0f, Time.deltaTime * 6f);
 
         _anim.SetFloat("Speed", _speedBlend);
-        _anim.SetBool("IsFlying", IsFlying);
-        _anim.SetBool("IsAttacking", IsAttacking);
+        _anim.SetBool("IsGrounded",   IsGrounded);
+        _anim.SetBool("IsFlying",     IsFlying);
+        _anim.SetBool("IsAttacking",  IsAttacking);
         _anim.SetInteger("AttackType", IsAttacking ? LastAttackType : 0);
         _anim.SetBool("IsChargingKi", IsChargingKi);
 
@@ -300,6 +302,37 @@ public class NinjaController : MonoBehaviour
 
         HandleAttacks();
         HandleWeaponTransform();
+        EnforceIslandBounds();
+    }
+
+    // ── Island boundary wall — gods cannot leave the island ───────────────
+    void EnforceIslandBounds()
+    {
+        const float BOUNDARY = 145f; // slightly inside water edge
+        Vector2 horiz = new Vector2(transform.position.x, transform.position.z);
+        float dist = horiz.magnitude;
+        if (dist <= BOUNDARY) return;
+
+        // Push back with increasing force the further out they are
+        float overshot = dist - BOUNDARY;
+        Vector3 inward = new Vector3(-horiz.normalized.x, 0, -horiz.normalized.y);
+        _rb.AddForce(inward * (overshot * 35f + 60f), ForceMode.Force);
+
+        // Hard clamp so they can't fall off into the void
+        if (dist > GameSettings.IslandRadius)
+        {
+            Vector2 clamped = horiz.normalized * GameSettings.IslandRadius;
+            _rb.position = new Vector3(clamped.x, _rb.position.y, clamped.y);
+            // Kill any velocity directed outward
+            Vector3 vel = _rb.linearVelocity;
+            float outwardSpeed = Vector2.Dot(new Vector2(vel.x, vel.z), horiz.normalized);
+            if (outwardSpeed > 0f)
+            {
+                vel.x -= horiz.normalized.x * outwardSpeed;
+                vel.z -= horiz.normalized.y * outwardSpeed;
+                _rb.linearVelocity = vel;
+            }
+        }
     }
 
 
@@ -503,6 +536,7 @@ public class NinjaController : MonoBehaviour
         {
             _rb.AddForce(Vector3.up * JumpForce, ForceMode.VelocityChange);
             IsFlying = true;
+            if (_anim != null) _anim.SetTrigger("JumpTrigger");
         }
 
         // Flight: right stick Y controls altitude
@@ -967,23 +1001,26 @@ public class NinjaController : MonoBehaviour
 
     IEnumerator PerformAttack()
     {
-        IsAttacking = true;
+        IsAttacking     = true;
         _attackCooldown = 0.4f;
+        // Cycle through all 4 attack animations: punch → heavy punch → kick → heavy kick
+        _attackComboStep = (_attackComboStep % 4) + 1;
+        LastAttackType   = _attackComboStep;
 
-        // Thrust forward based on speed for physics impact
         float boost = IsFlying ? 12f : 6f;
         _rb.AddForce(transform.forward * boost, ForceMode.VelocityChange);
 
-        // Notify hitbox to start tracking physics velocity
         ActivateWeaponHitbox(0, 2f, 90f, 0.4f);
 
         yield return new WaitForSeconds(0.4f);
-        IsAttacking = false;
+        IsAttacking    = false;
+        LastAttackType = 0;
     }
 
     IEnumerator PerformLightAttack()
     {
-        IsAttacking = true;
+        IsAttacking    = true;
+        LastAttackType = 1;
         _attackCooldown = LIGHT_ATTACK_COOLDOWN;
 
         // Lunge forward slightly
@@ -1002,7 +1039,8 @@ public class NinjaController : MonoBehaviour
 
     IEnumerator PerformHeavyAttack(float chargeTime)
     {
-        IsAttacking = true;
+        IsAttacking    = true;
+        LastAttackType = 2;
         _attackCooldown = HEAVY_ATTACK_COOLDOWN;
 
         chargeTime = Mathf.Clamp(chargeTime, 0.1f, 1.5f);
