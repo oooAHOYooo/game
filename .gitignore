@@ -136,8 +136,14 @@ InitTestScene*.unity*
 *.webp.meta
 
 # 3D models & meshes
+# Character model + Mixamo animation FBX files ARE tracked so builds
+# work on any machine. All other FBX (large environment meshes) stay ignored.
 *.fbx
 *.fbx.meta
+!Assets/Art/Models/**/*.fbx
+!Assets/Art/Models/**/*.fbx.meta
+!Assets/Art/Animations/**/*.fbx
+!Assets/Art/Animations/**/*.fbx.meta
 *.obj
 *.obj.meta
 *.dae
