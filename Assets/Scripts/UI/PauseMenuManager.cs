@@ -237,7 +237,7 @@ public class PauseMenuManager : MonoBehaviour
         aRT.sizeDelta = new Vector2(0f, 4f);
 
         // Build version + timestamp
-        string deviceLine = $"Keyboards: {Keyboard.all.Count}   Gamepads: {Gamepad.all.Count}";
+        string deviceLine = $"Keyboards: {InputSystem.devices.Count}   Gamepads: {Gamepad.all.Count}";
         string gpList = "";
         foreach (var gp in Gamepad.all) gpList += $"\n  • {gp.displayName}";
 

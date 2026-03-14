@@ -124,7 +124,7 @@ public class NinjaController : MonoBehaviour
         // Gamepads are NOT auto-assigned; a player must press any button to claim one.
         if (PlayerIndex == 0)
         {
-            Debug.Log($"[InputScan] Keyboards:{Keyboard.all.Count}  Mice:{Mouse.all.Count}  Gamepads:{Gamepad.all.Count}");
+            Debug.Log($"[InputScan] Keyboards:{InputSystem.devices.Count}  Mice:{InputSystem.devices.Count}  Gamepads:{Gamepad.all.Count}");
             foreach (var gp in Gamepad.all)
                 Debug.Log($"[InputScan]  Gamepad '{gp.displayName}' ({gp.name}) — press any button to assign to a player");
             if (Gamepad.all.Count == 0)
@@ -467,7 +467,9 @@ public class NinjaController : MonoBehaviour
         // If this player already has a gamepad, make sure it's still connected
         if (_pad != null)
         {
-            if (!Gamepad.all.Contains(_pad)) { _claimedGamepads.Remove(_pad); _pad = null; }
+            bool stillConnected = false;
+            foreach (var g in Gamepad.all) if (g == _pad) { stillConnected = true; break; }
+            if (!stillConnected) { _claimedGamepads.Remove(_pad); _pad = null; }
             else return;
         }
 
