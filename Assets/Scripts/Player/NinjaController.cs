@@ -1,6 +1,8 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.Controls;
 using System.Collections;
+using System.Collections.Generic;
 
 /// <summary>
 /// NinjaController — UFC5-inspired movement with Dragon Ball Z flight & ki beams.
@@ -62,6 +64,10 @@ public class NinjaController : MonoBehaviour
     private float _walkCycleTime = 0f;
 
     private Gamepad     _pad;
+
+    // Gamepads are only bound when a player actively presses a button on one.
+    // This prevents phantom/virtual devices from driving locomotion automatically.
+    private static readonly Dictionary<Gamepad, int> _claimedGamepads = new Dictionary<Gamepad, int>();
     private float       _dodgeTimer        = 0f;
     private float       _attackCooldown    = 0f;
     private float       _speedBlend        = 0f;
@@ -114,9 +120,16 @@ public class NinjaController : MonoBehaviour
 
     void Start()
     {
-        // Bind gamepad by index
-        if (Gamepad.all.Count > PlayerIndex)
-            _pad = Gamepad.all[PlayerIndex];
+        // Log detected input devices so phantom/virtual gamepads are visible in the console.
+        // Gamepads are NOT auto-assigned; a player must press any button to claim one.
+        if (PlayerIndex == 0)
+        {
+            Debug.Log($"[InputScan] Keyboards:{Keyboard.all.Count}  Mice:{Mouse.all.Count}  Gamepads:{Gamepad.all.Count}");
+            foreach (var gp in Gamepad.all)
+                Debug.Log($"[InputScan]  Gamepad '{gp.displayName}' ({gp.name}) — press any button to assign to a player");
+            if (Gamepad.all.Count == 0)
+                Debug.Log("[InputScan]  No gamepads detected — keyboard-only mode");
+        }
 
         // Ghost AI
         if (IsGhost)
@@ -366,18 +379,12 @@ public class NinjaController : MonoBehaviour
             var m = Mouse.current;
             if (k != null)
             {
-                // WASD
+                // WASD only (arrows belong to P2)
                 if (k.wKey.isPressed) compositeMove.y += 1;
                 if (k.sKey.isPressed) compositeMove.y -= 1;
                 if (k.aKey.isPressed) compositeMove.x -= 1;
                 if (k.dKey.isPressed) compositeMove.x += 1;
-                
-                // ARROWS (Now also move P1)
-                if (k.upArrowKey.isPressed) compositeMove.y += 1;
-                if (k.downArrowKey.isPressed) compositeMove.y -= 1;
-                if (k.leftArrowKey.isPressed) compositeMove.x -= 1;
-                if (k.rightArrowKey.isPressed) compositeMove.x += 1;
-                
+
                 compositeMove.x = Mathf.Clamp(compositeMove.x, -1f, 1f);
                 compositeMove.y = Mathf.Clamp(compositeMove.y, -1f, 1f);
 
@@ -432,7 +439,7 @@ public class NinjaController : MonoBehaviour
         }
 
         // 3. Gamepad — Shared
-        RefreshGamepad();
+        TryClaimGamepad();
         if (_pad != null)
         {
             var ls = _pad.leftStick.ReadValue();
@@ -455,10 +462,36 @@ public class NinjaController : MonoBehaviour
         _moveInput = new Vector3(compositeMove.x, 0, compositeMove.y);
     }
 
-    void RefreshGamepad()
+    void TryClaimGamepad()
     {
-        if (_pad == null && Gamepad.all.Count > PlayerIndex)
-            _pad = Gamepad.all[PlayerIndex];
+        // If this player already has a gamepad, make sure it's still connected
+        if (_pad != null)
+        {
+            if (!Gamepad.all.Contains(_pad)) { _claimedGamepads.Remove(_pad); _pad = null; }
+            else return;
+        }
+
+        // Scan for any gamepad with a button pressed this frame
+        foreach (var gp in Gamepad.all)
+        {
+            // Skip if another player already owns this gamepad
+            if (_claimedGamepads.TryGetValue(gp, out int owner) && owner != PlayerIndex) continue;
+
+            // Check every button control — claim on first press
+            bool anyPressed = false;
+            foreach (var ctrl in gp.allControls)
+            {
+                if (ctrl is ButtonControl btn && btn.wasPressedThisFrame) { anyPressed = true; break; }
+            }
+
+            if (anyPressed)
+            {
+                _pad = gp;
+                _claimedGamepads[gp] = PlayerIndex;
+                Debug.Log($"[InputScan] P{PlayerIndex + 1} claimed gamepad '{gp.displayName}'");
+                return;
+            }
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -466,6 +499,9 @@ public class NinjaController : MonoBehaviour
     // ─────────────────────────────────────────────────────────────────────
     void HandleMovement()
     {
+        // Always apply correct drag so character stops properly when input is released
+        _rb.linearDamping = IsFlying ? AirDrag : GroundDrag;
+
         if (_moveInput.sqrMagnitude < 0.01f) return;
 
         // Camera-relative movement
@@ -477,7 +513,6 @@ public class NinjaController : MonoBehaviour
         worldDir.Normalize();
 
         float speed = IsFlying ? GameSettings.PlayerAirSpeed : GameSettings.PlayerGroundSpeed;
-        _rb.linearDamping = IsFlying ? AirDrag : GroundDrag;
 
         Vector3 targetVel = worldDir * speed;
         Vector3 currentHoriz = new Vector3(_rb.linearVelocity.x, 0, _rb.linearVelocity.z);
@@ -539,11 +574,9 @@ public class NinjaController : MonoBehaviour
             if (_anim != null) _anim.SetTrigger("JumpTrigger");
         }
 
-        // Flight: right stick Y controls altitude
-        if (IsFlying || !IsGrounded)
+        // Altitude control — only when intentionally flying (set by jump)
+        if (IsFlying)
         {
-            IsFlying = true;
-
             if (_verticalInput > 0.3f && transform.position.y < GameSettings.PlayerMaxFlightAltitude)
             {
                 _rb.AddForce(Vector3.up * AscendForce * _verticalInput, ForceMode.Acceleration);
@@ -552,25 +585,22 @@ public class NinjaController : MonoBehaviour
             {
                 _rb.AddForce(Vector3.down * DescendForce * Mathf.Abs(_verticalInput), ForceMode.Acceleration);
             }
-            else if (IsFlying)
+            else
             {
                 // Hover — counteract gravity partially
                 float gravComp = -Physics.gravity.y * _rb.mass * 0.85f * GameSettings.GravityMultiplier;
                 _rb.AddForce(Vector3.up * gravComp, ForceMode.Force);
             }
+        }
 
-            // 2. JUMP HANG - Reduce gravity at the peak for better "Nintendo" feel
+        // Jump-hang + extra gravity for any airborne state
+        if (!IsGrounded)
+        {
             float yVel = _rb.linearVelocity.y;
             float gravityScale = 1f;
-            if (Mathf.Abs(yVel) < 2f && !IsGrounded) gravityScale = 0.5f;
+            if (Mathf.Abs(yVel) < 2f) gravityScale = 0.5f; // reduce gravity at jump peak
 
-            // Apply extra gravity for "heavy" feel if not hovering/ascending, but respect the hang
-            if (!IsGrounded)
-            {
-                _rb.AddForce(Physics.gravity * (GameSettings.GravityMultiplier * gravityScale - 1f), ForceMode.Acceleration);
-            }
-
-            // Landing check handled in CheckGrounded
+            _rb.AddForce(Physics.gravity * (GameSettings.GravityMultiplier * gravityScale - 1f), ForceMode.Acceleration);
         }
     }
 
@@ -579,7 +609,7 @@ public class NinjaController : MonoBehaviour
         bool wasGrounded = IsGrounded;
         float fallSpeed = -_rb.linearVelocity.y;
 
-        IsGrounded = Physics.Raycast(transform.position + Vector3.up * 0.1f, Vector3.down, 0.3f, LayerMask.GetMask("Default"));
+        IsGrounded = Physics.Raycast(transform.position + Vector3.up * 0.1f, Vector3.down, 0.5f, LayerMask.GetMask("Default"));
 
         if (IsGrounded && !wasGrounded)
         {
@@ -1408,7 +1438,15 @@ public class NinjaController : MonoBehaviour
 
     public Gamepad RefreshGamepadForInteractor()
     {
-        RefreshGamepad();
+        TryClaimGamepad();
         return _pad;
+    }
+
+    /// <summary>Returns the gamepad claimed by the given player, or null if keyboard-only.</summary>
+    public static Gamepad GetClaimedGamepad(int playerIndex)
+    {
+        foreach (var kvp in _claimedGamepads)
+            if (kvp.Value == playerIndex) return kvp.Key;
+        return null;
     }
 }

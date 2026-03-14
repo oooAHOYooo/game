@@ -37,35 +37,36 @@ public class AnimatorControllerBuilder
         controller.AddParameter("IsChargingKi",  AnimatorControllerParameterType.Bool);
         controller.AddParameter("JumpTrigger",   AnimatorControllerParameterType.Trigger);
 
-        // Create states
-        var idleState = rootStateMachine.AddState("Idle");
-        var runState = rootStateMachine.AddState("Run");
-        var sprintState = rootStateMachine.AddState("Sprint");
-        var jumpState = rootStateMachine.AddState("Jump");
-        var fallState = rootStateMachine.AddState("Fall");
-        var landState = rootStateMachine.AddState("Land");
+        // ── Locomotion blend tree (Idle → Run → Sprint driven by Speed) ──
+        var locoState = controller.CreateBlendTreeInController("Locomotion", out var blendTree, 0);
+        blendTree.blendType = BlendTreeType.Simple1D;
+        blendTree.blendParameter = "Speed";
+        blendTree.useAutomaticThresholds = false;
+        if (animSet.Idle)   { SetLoop(animSet.Idle,   true);  blendTree.AddChild(animSet.Idle,   0f); }
+        if (animSet.Run)    { SetLoop(animSet.Run,    true);  blendTree.AddChild(animSet.Run,    1f); }
+        if (animSet.Sprint) { SetLoop(animSet.Sprint, true);  blendTree.AddChild(animSet.Sprint, 1.2f); }
+        else if (animSet.Run) blendTree.AddChild(animSet.Run, 1.2f); // fallback if no sprint clip
 
-        // UFC-style attack states (punch/kick)
+        // ── Other states ─────────────────────────────────────────────────
+        var jumpState      = rootStateMachine.AddState("Jump");
+        var fallState      = rootStateMachine.AddState("Fall");
+        var landState      = rootStateMachine.AddState("Land");
         var lightPunchState = rootStateMachine.AddState("Attack Light Punch");
         var heavyPunchState = rootStateMachine.AddState("Attack Heavy Punch");
-        var lightKickState = rootStateMachine.AddState("Attack Light Kick");
-        var heavyKickState = rootStateMachine.AddState("Attack Heavy Kick");
-        var chargeState = rootStateMachine.AddState("Charge");
+        var lightKickState  = rootStateMachine.AddState("Attack Light Kick");
+        var heavyKickState  = rootStateMachine.AddState("Attack Heavy Kick");
+        var chargeState     = rootStateMachine.AddState("Charge");
 
-        // Assign animation clips and ensure they loop if they are locomotion
-        if (animSet.Idle) { SetLoop(animSet.Idle, true); idleState.motion = animSet.Idle; }
-        if (animSet.Run) { SetLoop(animSet.Run, true); runState.motion = animSet.Run; }
-        if (animSet.Sprint) { SetLoop(animSet.Sprint, true); sprintState.motion = animSet.Sprint; }
-        if (animSet.Jump) { SetLoop(animSet.Jump, false); jumpState.motion = animSet.Jump; }
-        if (animSet.Fall) { SetLoop(animSet.Fall, true); fallState.motion = animSet.Fall; }
-        if (animSet.Land) { SetLoop(animSet.Land, false); landState.motion = animSet.Land; }
-        if (animSet.LightPunch) { SetLoop(animSet.LightPunch, false); lightPunchState.motion = animSet.LightPunch; }
-        if (animSet.HeavyPunch) { SetLoop(animSet.HeavyPunch, false); heavyPunchState.motion = animSet.HeavyPunch; }
-        if (animSet.LightKick) { SetLoop(animSet.LightKick, false); lightKickState.motion = animSet.LightKick; }
-        if (animSet.HeavyKick) { SetLoop(animSet.HeavyKick, false); heavyKickState.motion = animSet.HeavyKick; }
-        if (animSet.ChargeAttack) { SetLoop(animSet.ChargeAttack, true); chargeState.motion = animSet.ChargeAttack; }
+        if (animSet.Jump)        { SetLoop(animSet.Jump,        false); jumpState.motion       = animSet.Jump; }
+        if (animSet.Fall)        { SetLoop(animSet.Fall,        true);  fallState.motion       = animSet.Fall; }
+        if (animSet.Land)        { SetLoop(animSet.Land,        false); landState.motion       = animSet.Land; }
+        if (animSet.LightPunch)  { SetLoop(animSet.LightPunch,  false); lightPunchState.motion = animSet.LightPunch; }
+        if (animSet.HeavyPunch)  { SetLoop(animSet.HeavyPunch,  false); heavyPunchState.motion = animSet.HeavyPunch; }
+        if (animSet.LightKick)   { SetLoop(animSet.LightKick,   false); lightKickState.motion  = animSet.LightKick; }
+        if (animSet.HeavyKick)   { SetLoop(animSet.HeavyKick,   false); heavyKickState.motion  = animSet.HeavyKick; }
+        if (animSet.ChargeAttack){ SetLoop(animSet.ChargeAttack,true);  chargeState.motion     = animSet.ChargeAttack; }
 
-        rootStateMachine.defaultState = idleState;
+        rootStateMachine.defaultState = locoState;
 
         // ── Helpers ──────────────────────────────────────────────────────
         AnimatorStateTransition T(AnimatorState from, AnimatorState to,
@@ -83,36 +84,29 @@ public class AnimatorControllerBuilder
             return t;
         }
 
-        // ── Locomotion ────────────────────────────────────────────────────
-        T(idleState, runState).AddCondition(AnimatorConditionMode.Greater, 0.1f, "Speed");
-        T(runState, idleState).AddCondition(AnimatorConditionMode.Less, 0.1f, "Speed");
-        T(runState, sprintState).AddCondition(AnimatorConditionMode.Greater, 1.05f, "Speed");
-        T(sprintState, runState).AddCondition(AnimatorConditionMode.Less, 1.05f, "Speed");
-
         // ── Aerial ───────────────────────────────────────────────────────
-        // Jump trigger → jump state (plays once, then falls through to fall)
         var anyToJump = Any(jumpState, 0.05f);
         anyToJump.AddCondition(AnimatorConditionMode.If, 0, "JumpTrigger");
 
-        var jumpToFall = T(jumpState, fallState, exit: 0.5f, dur: 0.1f, hasExit: true);
+        T(jumpState, fallState, exit: 0.5f, dur: 0.1f, hasExit: true);
 
-        // Any → Fall when airborne and not intentionally flying
-        var anyToFall = Any(fallState, 0.1f);
+        // Any → Fall when airborne (not attacking, not flying)
+        var anyToFall = Any(fallState, 0.2f);
         anyToFall.AddCondition(AnimatorConditionMode.IfNot, 0, "IsGrounded");
         anyToFall.AddCondition(AnimatorConditionMode.IfNot, 0, "IsFlying");
         anyToFall.AddCondition(AnimatorConditionMode.IfNot, 0, "IsAttacking");
 
-        // Any → airborne flying pose (reuses fall clip) when IsFlying=true
+        // Any → airborne flying pose when IsFlying=true
         var anyToFly = Any(fallState, 0.2f);
         anyToFly.AddCondition(AnimatorConditionMode.If, 0, "IsFlying");
 
-        // Land when touching ground
+        // Fall → Land
         var fallToLand = T(fallState, landState, dur: 0.05f);
         fallToLand.AddCondition(AnimatorConditionMode.If, 0, "IsGrounded");
         fallToLand.AddCondition(AnimatorConditionMode.IfNot, 0, "IsFlying");
 
-        // Land → Idle after clip finishes
-        var landToIdle = T(landState, idleState, exit: 0.85f, dur: 0.15f, hasExit: true);
+        // Land → Locomotion after clip finishes
+        T(landState, locoState, exit: 0.85f, dur: 0.15f, hasExit: true);
 
         // ── Attacks (Any-state, highest priority) ─────────────────────────
         var toPunch = Any(lightPunchState);
@@ -133,7 +127,7 @@ public class AnimatorControllerBuilder
 
         foreach (var atk in new[] { lightPunchState, heavyPunchState, lightKickState, heavyKickState })
         {
-            var back = T(atk, idleState, exit: 0.75f, dur: 0.1f, hasExit: true);
+            var back = T(atk, locoState, exit: 0.75f, dur: 0.15f, hasExit: true);
             back.AddCondition(AnimatorConditionMode.IfNot, 0, "IsAttacking");
         }
 
@@ -141,8 +135,8 @@ public class AnimatorControllerBuilder
         var toCharge = Any(chargeState, 0.15f);
         toCharge.AddCondition(AnimatorConditionMode.If, 0, "IsChargingKi");
 
-        var chargeToIdle = T(chargeState, idleState, dur: 0.1f);
-        chargeToIdle.AddCondition(AnimatorConditionMode.IfNot, 0, "IsChargingKi");
+        var chargeToLoco = T(chargeState, locoState, dur: 0.15f);
+        chargeToLoco.AddCondition(AnimatorConditionMode.IfNot, 0, "IsChargingKi");
 
         UnityEditor.EditorUtility.SetDirty(controller);
         UnityEditor.AssetDatabase.SaveAssets();

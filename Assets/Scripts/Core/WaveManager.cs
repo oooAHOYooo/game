@@ -85,12 +85,12 @@ public class WaveManager : MonoBehaviour
         var controllers = FindObjectsByType<NinjaController>(FindObjectsSortMode.None);
         foreach (var ctrl in controllers) GameBootstrapper.SpawnAlert(ctrl.transform);
 
-        // Spawn enemies one-by-one with a tiny delay each
+        // Drop all enemies from the sky simultaneously — lands alongside players
         for (int i = 0; i < enemyList.Count; i++)
-        {
-            SpawnSingleEnemy(enemyList[i], i, enemyList.Count, waveIndex);
-            yield return new WaitForSeconds(0.3f);
-        }
+            SpawnSingleEnemy(enemyList[i], i, enemyList.Count, waveIndex, fromSky: true);
+
+        // Wait for enemies to land + do their mischief before first engagement
+        yield return new WaitForSeconds(3.5f);
 
         // Kick off the first engagement
         PromoteNextEnemy();
@@ -99,11 +99,15 @@ public class WaveManager : MonoBehaviour
         StartCoroutine(ReinforcementLoop(waveIndex));
     }
 
-    void SpawnSingleEnemy(string type, int index, int total, int waveIndex)
+    void SpawnSingleEnemy(string type, int index, int total, int waveIndex, bool fromSky = false)
     {
-        Vector3 spawnPos = GetSpawnPosition(index, total);
+        Vector3 spawnPos;
+        if (fromSky)
+            spawnPos = GetSkyDropPosition(index, total);        // above island
+        else
+            spawnPos = GetSpawnPosition(index, total);          // ocean edge
 
-        // SkyBombs land on the island, not the water edge
+        // SkyBombs always use their specific landing target
         if (type == "SkyBomb")
             spawnPos = GetSkyBombLandingPosition();
 
@@ -123,8 +127,16 @@ public class WaveManager : MonoBehaviour
         _aliveCount++;
         _waveSpawned++;
 
-        // Visual arrival effect
-        SpawnEnemyArrivalFX(spawnPos);
+        // Tag non-SkyBomb enemies to do the drop-in mischief landing
+        if (fromSky && type != "SkyBomb")
+        {
+            var ai = enemyGO.GetComponent<EnemyAI>();
+            if (ai != null) ai.SpawnFromSky = true;
+        }
+
+        // Visual arrival effect only for ocean-edge spawns (sky drops have their own drama)
+        if (!fromSky)
+            SpawnEnemyArrivalFX(spawnPos);
     }
 
     void SpawnEnemyArrivalFX(Vector3 pos)
@@ -409,6 +421,17 @@ public class WaveManager : MonoBehaviour
         }
 
         return list;
+    }
+
+    /// <summary>Sky-drop position: spread across the island at SKY_SPAWN_HEIGHT, away from players.</summary>
+    Vector3 GetSkyDropPosition(int index, int total)
+    {
+        float angle  = (index / (float)Mathf.Max(1, total)) * Mathf.PI * 2f;
+        float radius = Random.Range(15f, GameSettings.IslandRadius * 0.55f);
+        return new Vector3(
+            Mathf.Cos(angle) * radius,
+            EnemyAI.SKY_SPAWN_HEIGHT,
+            Mathf.Sin(angle) * radius);
     }
 
     Vector3 GetSpawnPosition(int index, int total)

@@ -58,13 +58,13 @@ public class MenuManager : MonoBehaviour
         gRT.offsetMin  = gRT.offsetMax = Vector2.zero;
 
         // ─── Version Label (bottom right) ────────────────────────────────
-        var verLbl = MakeLabel(_menuRoot, "v0.1.0", 14, new Color(0.6f, 0.6f, 0.6f, 0.8f));
+        var verLbl = MakeLabel(_menuRoot, $"v{BuildInfo.Version}  •  {BuildInfo.BuildTime}", 14, new Color(0.6f, 0.6f, 0.6f, 0.8f));
         var verRT  = verLbl.GetComponent<RectTransform>();
         verRT.anchorMin        = new Vector2(1f, 0f);
         verRT.anchorMax        = new Vector2(1f, 0f);
         verRT.pivot            = new Vector2(1f, 0f);
         verRT.anchoredPosition = new Vector2(-20f, 14f);
-        verRT.sizeDelta        = new Vector2(120f, 24f);
+        verRT.sizeDelta        = new Vector2(260f, 24f);
         verLbl.alignment       = TextAnchor.MiddleRight;
 
         // ─── Title — Top Left ─────────────────────────────────────────────

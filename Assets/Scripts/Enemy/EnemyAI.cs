@@ -57,6 +57,10 @@ public class EnemyAI : MonoBehaviour
     private const float SKYBOMB_FIRE_DAMAGE = 30f;
     private const float FIRE_ZONE_DURATION  = 12f;
 
+    // ── Drop-in entry (non-SkyBomb enemies falling from sky) ─────────────
+    public  bool        SpawnFromSky      = false;   // set by WaveManager before Start()
+    private bool        _isMischiefing    = false;
+
     // ─────────────────────────────────────────────────────────────────────
     void Awake()
     {
@@ -93,18 +97,29 @@ public class EnemyAI : MonoBehaviour
             _rb.useGravity   = true;
             SpawnSkyDropTrail();
         }
+
+        // All wave-start enemies drop from the sky — mischief on landing
+        if (SpawnFromSky && EnemyType != "SkyBomb")
+        {
+            _isSkyDropping = true;
+            _rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
+            _rb.useGravity   = true;
+        }
     }
 
     void Update()
     {
         if (!_base.IsAlive) return;
 
-        // SkyBombs are sky-dropping — skip normal AI until landed
+        // Sky-dropping — skip normal AI until landed
         if (_isSkyDropping)
         {
             UpdateSkyDrop();
             return;
         }
+
+        // Mischief on landing — taunt before engaging
+        if (_isMischiefing) return;
 
         // All enemies are confined to the island
         EnforceIslandBounds();
@@ -823,9 +838,111 @@ public class EnemyAI : MonoBehaviour
         // Landed when falling fast then suddenly slowed (hit ground)
         if (_skyDropFalling && velY > -2f && transform.position.y < 25f)
         {
-            OnSkyBombLanded();
             _isSkyDropping = false;
+            if (EnemyType == "SkyBomb")
+                OnSkyBombLanded();
+            else
+                OnDropInLanded();
         }
+    }
+
+    void OnDropInLanded()
+    {
+        // Restore rotation constraints
+        _rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
+
+        // Small dust puff on landing
+        var dust = new GameObject("LandingDust");
+        dust.transform.position = transform.position;
+        var ps   = dust.AddComponent<ParticleSystem>();
+        var main = ps.main;
+        main.duration      = 0.3f;
+        main.loop          = false;
+        main.startLifetime = new ParticleSystem.MinMaxCurve(0.3f, 0.7f);
+        main.startSpeed    = new ParticleSystem.MinMaxCurve(2f, 7f);
+        main.startSize     = new ParticleSystem.MinMaxCurve(0.2f, 0.5f);
+        main.startColor    = new ParticleSystem.MinMaxGradient(
+            new Color(0.7f, 0.6f, 0.4f, 0.8f), new Color(0.9f, 0.85f, 0.7f, 0.6f));
+        main.gravityModifier = 0.2f;
+        main.maxParticles    = 40;
+        var em = ps.emission;
+        em.SetBursts(new[] { new ParticleSystem.Burst(0f, 35) });
+        em.rateOverTime = 0;
+        var shape = ps.shape;
+        shape.shapeType = ParticleSystemShapeType.Circle;
+        shape.radius    = 0.8f;
+        ps.Play();
+        Destroy(dust, 1.5f);
+
+        StartCoroutine(LandingMischief());
+    }
+
+    IEnumerator LandingMischief()
+    {
+        _isMischiefing = true;
+        FindTarget();
+
+        // 1. Stick the landing — brief crouch (freeze in place)
+        _rb.linearVelocity = Vector3.zero;
+        if (_anim != null) _anim.SetFloat("Speed", 0f);
+        yield return new WaitForSeconds(0.25f);
+
+        // 2. Spin to face nearest player with exaggerated speed
+        if (_target != null)
+        {
+            float spinTime = 0.35f;
+            for (float t = 0; t < spinTime; t += Time.deltaTime)
+            {
+                Vector3 dir = (_target.position - transform.position);
+                dir.y = 0;
+                if (dir.sqrMagnitude > 0.01f)
+                    transform.rotation = Quaternion.Slerp(transform.rotation,
+                        Quaternion.LookRotation(dir.normalized), t / spinTime);
+                yield return null;
+            }
+        }
+
+        // 3. Little strut — take 2 cocky steps toward the player then stop
+        if (_target != null && _anim != null)
+        {
+            _anim.SetFloat("Speed", 0.6f);
+            float strutTime = 0.5f;
+            Vector3 strutDir = (_target.position - transform.position).normalized;
+            for (float t = 0; t < strutTime; t += Time.deltaTime)
+            {
+                _rb.AddForce(strutDir * MoveSpeed * 1.5f, ForceMode.Acceleration);
+                yield return null;
+            }
+            _rb.linearVelocity = new Vector3(0, _rb.linearVelocity.y, 0);
+            _anim.SetFloat("Speed", 0f);
+        }
+
+        // 4. Taunt flash — enemy glows their accent color and "laughs" (AttackType pose briefly)
+        yield return new WaitForSeconds(0.15f);
+        if (_anim != null) _anim.SetInteger("AttackType", 3); // idle kick pose
+        foreach (var r in GetComponentsInChildren<Renderer>())
+            GameBootstrapper.SetHDRPEmission(r.material, _base.AccentColor, 12f);
+
+        yield return new WaitForSeconds(0.45f);
+
+        // 5. Second look — glance away then snap back (double-take)
+        transform.Rotate(0, 45f, 0);
+        yield return new WaitForSeconds(0.2f);
+        if (_target != null)
+        {
+            Vector3 snapDir = (_target.position - transform.position);
+            snapDir.y = 0;
+            if (snapDir.sqrMagnitude > 0.01f)
+                transform.rotation = Quaternion.LookRotation(snapDir.normalized);
+        }
+        yield return new WaitForSeconds(0.1f);
+
+        // 6. Done — reset glow and unleash
+        if (_anim != null) _anim.SetInteger("AttackType", 0);
+        foreach (var r in GetComponentsInChildren<Renderer>())
+            GameBootstrapper.SetHDRPEmission(r.material, _base.AccentColor, 1.5f);
+
+        _isMischiefing = false;
     }
 
     void OnSkyBombLanded()

@@ -54,12 +54,11 @@ public class MixamoImportPostprocessor : AssetPostprocessor
         // Keep the avatar but strip the mesh to save memory.
         if (IsAnimationOnlyPath(assetPath))
         {
-            importer.importMaterials = false;
+            importer.materialImportMode = ModelImporterMaterialImportMode.None;
         }
         else
         {
             // Character model — keep materials
-            importer.importMaterials = true;
             importer.materialImportMode = ModelImporterMaterialImportMode.ImportStandard;
         }
     }
@@ -88,7 +87,7 @@ public class MixamoImportPostprocessor : AssetPostprocessor
         {
             bool shouldLoop = ShouldLoop(clips[i].name);
             clips[i].loopTime = shouldLoop;
-            clips[i].lockRootRotationY  = true;   // prevent root rotation drift
+            clips[i].lockRootRotation   = true;   // prevent root rotation drift
             clips[i].lockRootHeightY    = false;   // allow in-place locomotion
             clips[i].keepOriginalOrientation = false;
         }

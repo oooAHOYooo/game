@@ -13,7 +13,7 @@ public class BuildRPi
             Directory.CreateDirectory(buildDir);
 
         // Force ARM64 architecture (0 = x86_64, 1 = ARM64)
-        PlayerSettings.SetArchitecture(BuildTargetGroup.Standalone, 1);
+        PlayerSettings.SetArchitecture(UnityEditor.Build.NamedBuildTarget.Standalone, 1);
 
         EditorUserBuildSettings.selectedStandaloneTarget = BuildTarget.StandaloneLinux64;
         EditorUserBuildSettings.standaloneBuildSubtarget = StandaloneBuildSubtarget.Player;
@@ -29,7 +29,7 @@ public class BuildRPi
         BuildPipeline.BuildPlayer(buildPlayerOptions);
 
         // Restore to x86_64 so other builds aren't affected
-        PlayerSettings.SetArchitecture(BuildTargetGroup.Standalone, 0);
+        PlayerSettings.SetArchitecture(UnityEditor.Build.NamedBuildTarget.Standalone, 0);
 
         UnityEngine.Debug.Log("✅ RPi ARM64 Build complete! Output: " + buildPath);
     }

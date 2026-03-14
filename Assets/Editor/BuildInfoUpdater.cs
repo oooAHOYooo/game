@@ -18,13 +18,13 @@ public class BuildInfoUpdater : IPreprocessBuildWithReport
         EditorApplication.playModeStateChanged += state =>
         {
             if (state == PlayModeStateChange.ExitingEditMode)
-                Write();
+                Write(reimport: false);  // don't reimport — that cancels play mode entry
         };
     }
 
-    public void OnPreprocessBuild(BuildReport _) => Write();
+    public void OnPreprocessBuild(BuildReport _) => Write(reimport: true);
 
-    static void Write()
+    static void Write(bool reimport = true)
     {
         string version   = PlayerSettings.bundleVersion;
         string timestamp = DateTime.Now.ToString("yyyy-MM-dd  HH:mm");
@@ -42,6 +42,6 @@ public static class BuildInfo
 }}
 ";
         File.WriteAllText(path, content);
-        AssetDatabase.ImportAsset(path);
+        if (reimport) AssetDatabase.ImportAsset(path);
     }
 }

@@ -10,12 +10,14 @@ using UnityEngine.InputSystem;
 public class PauseMenuManager : MonoBehaviour
 {
     private GameObject _menuRoot;
+    private GameObject _buildInfoPanel;
     private Button     _resumeButton;
     private Button     _settingsButton;
     private Button     _saveButton;
     private Button     _exitButton;
-    
+
     private bool _isPaused = false;
+    private bool _buildInfoVisible = false;
 
     void Start()
     {
@@ -89,11 +91,15 @@ public class PauseMenuManager : MonoBehaviour
         bgRT.anchoredPosition = new Vector2(0, -50);
         bgRT.sizeDelta = new Vector2(400, 400);
 
+        // ─── Build Info Panel (hidden by default) ────────────────────────
+        _buildInfoPanel = BuildInfoPanel(overlay);
+        _buildInfoPanel.SetActive(false);
+
         // ─── Buttons ─────────────────────────────────────────────────────
-        _resumeButton = CreateButton(btnGroup, "RESUME", new Vector2(0, 150), () => { ResumeGame(); });
-        _settingsButton = CreateButton(btnGroup, "SETTINGS", new Vector2(0, 50), () => { Debug.Log("Settings not yet implemented."); });
-        _saveButton = CreateButton(btnGroup, "SAVE GAME", new Vector2(0, -50), () => { Debug.Log("Save not yet implemented."); });
-        _exitButton = CreateButton(btnGroup, "EXIT GAME", new Vector2(0, -150), () => { QuitGame(); });
+        _resumeButton   = CreateButton(btnGroup, "RESUME",    new Vector2(0,  150), () => { ResumeGame(); });
+        _settingsButton = CreateButton(btnGroup, "BUILD INFO", new Vector2(0,   50), ToggleBuildInfo);
+        _saveButton     = CreateButton(btnGroup, "SAVE GAME", new Vector2(0,  -50), () => { Debug.Log("Save not yet implemented."); });
+        _exitButton     = CreateButton(btnGroup, "EXIT GAME", new Vector2(0, -150), () => { QuitGame(); });
         
         // Link navigation manually to ensure controller D-Pad/Stick works reliably
         SetupNavigation(_resumeButton, _settingsButton, _exitButton);
@@ -207,6 +213,54 @@ public class PauseMenuManager : MonoBehaviour
         bRT.anchorMax = new Vector2(1f, 1f);
         bRT.offsetMin = new Vector2(10f, 8f);
         bRT.offsetMax = new Vector2(-10f, bodyY);
+    }
+
+    GameObject BuildInfoPanel(GameObject parent)
+    {
+        var panel = new GameObject("BuildInfoPanel");
+        panel.transform.SetParent(parent.transform, false);
+        var bg = panel.AddComponent<Image>();
+        bg.color = new Color(0.04f, 0.04f, 0.12f, 0.97f);
+        var rt = panel.GetComponent<RectTransform>();
+        rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+        rt.sizeDelta = new Vector2(500f, 260f);
+        rt.anchoredPosition = new Vector2(-100f, 0f);
+
+        // Accent bar
+        var accent = new GameObject("Accent");
+        accent.transform.SetParent(panel.transform, false);
+        accent.AddComponent<Image>().color = GameBootstrapper.PaletteGold;
+        var aRT = accent.GetComponent<RectTransform>();
+        aRT.anchorMin = new Vector2(0f, 1f); aRT.anchorMax = new Vector2(1f, 1f);
+        aRT.pivot = new Vector2(0.5f, 1f);
+        aRT.offsetMin = aRT.offsetMax = Vector2.zero;
+        aRT.sizeDelta = new Vector2(0f, 4f);
+
+        // Build version + timestamp
+        string deviceLine = $"Keyboards: {Keyboard.all.Count}   Gamepads: {Gamepad.all.Count}";
+        string gpList = "";
+        foreach (var gp in Gamepad.all) gpList += $"\n  • {gp.displayName}";
+
+        string body =
+            $"<b>VERSION</b>   v{BuildInfo.Version}\n\n" +
+            $"<b>BUILT</b>       {BuildInfo.BuildTime}\n\n" +
+            $"<b>PLATFORM</b>  {Application.platform}\n\n" +
+            $"<b>INPUT</b>       {deviceLine}{gpList}";
+
+        var lbl = CreateLabel(panel, body, new Vector2(0f, -20f), 20, Color.white);
+        lbl.alignment = TextAnchor.UpperLeft;
+        lbl.supportRichText = true;
+        var lRT = lbl.GetComponent<RectTransform>();
+        lRT.anchorMin = Vector2.zero; lRT.anchorMax = Vector2.one;
+        lRT.offsetMin = new Vector2(20f, 12f); lRT.offsetMax = new Vector2(-20f, -24f);
+
+        return panel;
+    }
+
+    void ToggleBuildInfo()
+    {
+        _buildInfoVisible = !_buildInfoVisible;
+        _buildInfoPanel.SetActive(_buildInfoVisible);
     }
 
     void SetupNavigation(Button btn, Button downTarget, Button upTarget)
