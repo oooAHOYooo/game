@@ -243,28 +243,84 @@ public class GameBootstrapper : MonoBehaviour
     // ─────────────────────────────────────────────────────────────────────────
     void BuildPlayers()
     {
+<<<<<<< HEAD
         // Spawning high above ground so they fall to terrain via Rigidbody
         float spawnY = 50f;
+=======
+        float spawnY = 300f;
+        bool isGhost = false;
+>>>>>>> 8e810e5690dab86ac8de7c21cfeecb4810dd8e25
 
-        // Player 1 – always active (god-sized ninja on the island)
-        // Try animated character first, fall back to primitive if model not found
+        // Try animated Mixamo character first, fall back to primitives.
+        // Editor:   uses AssetDatabase (no Resources overhead).
+        // Runtime:  uses Resources.Load from Assets/Resources/Characters/.
+        //           The prefab is created by  NinjaStrike ▶ Setup Animated Characters
+        //           in the editor menu — run it once after importing the Mixamo FBX.
         #if UNITY_EDITOR
         _player1 = TryBuildAnimatedNinja("Player1", new Vector3(-8f, spawnY, 0), PaletteGold, false, 0)
                 ?? BuildNinja("Player1", new Vector3(-8f, spawnY, 0), PaletteGold, false, 0);
+        _player2Ghost = TryBuildAnimatedNinja("Player2", new Vector3(8f, spawnY, 0), PaletteGhostBlue, isGhost, 1)
+                     ?? BuildNinja("Player2", new Vector3(8f, spawnY, 0), PaletteGhostBlue, isGhost, 1);
         #else
-        _player1 = BuildNinja("Player1", new Vector3(-8f, spawnY, 0), PaletteGold, false, 0);
+        _player1 = TryBuildAnimatedNinjaRuntime("Player1", new Vector3(-8f, spawnY, 0), PaletteGold, false, 0)
+                ?? BuildNinja("Player1", new Vector3(-8f, spawnY, 0), PaletteGold, false, 0);
+        _player2Ghost = TryBuildAnimatedNinjaRuntime("Player2", new Vector3(8f, spawnY, 0), PaletteGhostBlue, isGhost, 1)
+                     ?? BuildNinja("Player2", new Vector3(8f, spawnY, 0), PaletteGhostBlue, isGhost, 1);
         #endif
+    }
 
+<<<<<<< HEAD
         float spawn2Y = 50f;
+=======
+    /// <summary>
+    /// Runtime (build) version of TryBuildAnimatedNinja.
+    /// Loads the player prefab created by the "NinjaStrike/Setup Animated Characters"
+    /// editor menu item from Assets/Resources/Characters/PlayerAnimated.prefab.
+    /// Returns null if the prefab hasn't been created yet (falls back to primitives).
+    /// </summary>
+    GameObject TryBuildAnimatedNinjaRuntime(string playerName, Vector3 spawnPos, Color bodyColor, bool isGhost, int playerIndex)
+    {
+        var modelPrefab = Resources.Load<GameObject>("Characters/PlayerAnimated");
+        if (modelPrefab == null) return null;
+>>>>>>> 8e810e5690dab86ac8de7c21cfeecb4810dd8e25
 
-        // Player 2 – ghost AI disabled by request to allow keyboard control
-        bool isGhost = false; 
-        #if UNITY_EDITOR
-        _player2Ghost = TryBuildAnimatedNinja("Player2", new Vector3(8f, spawn2Y, 0), PaletteGhostBlue, isGhost, 1)
-                     ?? BuildNinja("Player2", new Vector3(8f, spawn2Y, 0), PaletteGhostBlue, isGhost, 1);
-        #else
-        _player2Ghost = BuildNinja("Player2", new Vector3(8f, spawn2Y, 0), PaletteGhostBlue, isGhost, 1);
-        #endif
+        var root = Instantiate(modelPrefab, spawnPos, Quaternion.identity);
+        root.name = playerName;
+
+        var animSet = Resources.Load<RuntimeAnimatorController>("Animator/PlayerController");
+
+        var animator = root.GetComponent<Animator>();
+        if (animator == null) animator = root.AddComponent<Animator>();
+        if (animSet != null) animator.runtimeAnimatorController = animSet;
+        animator.applyRootMotion = false;
+
+        var rb = root.GetComponent<Rigidbody>();
+        if (rb == null) rb = root.AddComponent<Rigidbody>();
+        rb.mass = 70f; rb.linearDamping = 2f; rb.angularDamping = 5f;
+        rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
+
+        var col = root.GetComponent<CapsuleCollider>();
+        if (col == null) col = root.AddComponent<CapsuleCollider>();
+        col.height = 2f; col.radius = 0.4f; col.center = new Vector3(0, 1f, 0);
+
+        var ctrl = root.GetComponent<NinjaController>();
+        if (ctrl == null) ctrl = root.AddComponent<NinjaController>();
+        ctrl.PlayerIndex = playerIndex;
+        ctrl.IsGhost     = isGhost;
+        ctrl.BodyColor   = bodyColor;
+
+        var weaponHolder = new GameObject("WeaponHolder").transform;
+        weaponHolder.SetParent(root.transform);
+        weaponHolder.localPosition = new Vector3(0.5f, 1.2f, 0);
+        ctrl.WeaponHolder = weaponHolder;
+        ctrl.SwordRoot    = BuildWeapon(weaponHolder, false, bodyColor);
+
+        root.AddComponent<EnvironmentInteractor>();
+        var health = root.AddComponent<PlayerHealth>();
+        health.PlayerIndex = playerIndex;
+
+        Debug.Log($"[GameBootstrapper] Built animated ninja {playerName} from Resources prefab");
+        return root;
     }
 
     /// <summary>

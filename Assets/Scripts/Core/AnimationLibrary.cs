@@ -35,27 +35,65 @@ public class AnimationLibrary
     {
         var set = new AnimationSet();
 
-        // Load locomotion animations
-        set.Idle = FindBestMatch(LOCOMOTION_FOLDER, new[] { "Idle" }, exact: true);
-        set.Run = FindBestMatch(LOCOMOTION_FOLDER, new[] { "Standing Run Forward" }, exact: true);
-        set.Sprint = FindBestMatch(LOCOMOTION_FOLDER, new[] { "Standing Sprint Forward" }, exact: true);
-        set.Jump = FindBestMatch(LOCOMOTION_FOLDER, new[] { "Standing Jump" }, exact: true);
-        set.Fall = FindBestMatch(LOCOMOTION_FOLDER, new[] { "Fall A Loop" }, exact: true);
-        set.Land = FindBestMatch(LOCOMOTION_FOLDER, new[] { "Fall A Land To Standing Idle 01" }, exact: true);
+        // Each slot lists names in priority order — exact first, then fuzzy fallbacks.
+        // This handles Mixamo's slight naming variations across download batches.
 
-        // Load combat animations — UFC-style punches and kicks
-        set.LightPunch   = FindBestMatch(COMBAT_FOLDER, new[] { "Punching" }, exact: true);
-        set.HeavyPunch   = FindBestMatch(COMBAT_FOLDER, new[] { "Boxing (1)" }, exact: true);
-        set.LightKick    = FindBestMatch(COMBAT_FOLDER, new[] { "Boxing" }, exact: true); // no kick found, mapped to second boxing
-        set.HeavyKick    = FindBestMatch(COMBAT_FOLDER, new[] { "Standing Melee Attack Horizontal" }, exact: true);
-        set.ChargeAttack = FindBestMatch(COMBAT_FOLDER, new[] { "Standing Aim Overdraw" }, exact: true);
+        // ── Locomotion ───────────────────────────────────────────────────
+        set.Idle   = FindBestMatch(LOCOMOTION_FOLDER, new[] {
+                         "Idle", "Standing Idle", "Breathing Idle",
+                         "Neutral Idle", "T-Pose" });
+
+        set.Run    = FindBestMatch(LOCOMOTION_FOLDER, new[] {
+                         "Standing Run Forward", "Run Forward",
+                         "Running", "Run" });
+
+        set.Sprint = FindBestMatch(LOCOMOTION_FOLDER, new[] {
+                         "Standing Sprint Forward", "Sprint Forward",
+                         "Sprinting", "Sprint" });
+
+        set.Jump   = FindBestMatch(LOCOMOTION_FOLDER, new[] {
+                         "Standing Jump", "Jump", "Jumping" });
+
+        set.Fall   = FindBestMatch(LOCOMOTION_FOLDER, new[] {
+                         "Fall A Loop", "Falling Idle", "Falling",
+                         "Fall Loop", "In Air" });
+
+        set.Land   = FindBestMatch(LOCOMOTION_FOLDER, new[] {
+                         "Fall A Land To Standing Idle 01",
+                         "Hard Landing", "Landing", "Land",
+                         "Fall To Idle" });
+
+        // ── Combat ───────────────────────────────────────────────────────
+        set.LightPunch   = FindBestMatch(COMBAT_FOLDER, new[] {
+                               "Punching", "Jab", "Straight Punch",
+                               "Standing 1H Magic Attack 01" });
+
+        set.HeavyPunch   = FindBestMatch(COMBAT_FOLDER, new[] {
+                               "Boxing (1)", "Boxing",
+                               "Hook", "Uppercut",
+                               "Standing Melee Attack Downward" });
+
+        set.LightKick    = FindBestMatch(COMBAT_FOLDER, new[] {
+                               "Jump Kick", "Kick",
+                               "Standing Kick", "Low Kick",
+                               "Roundhouse Kick" });
+
+        set.HeavyKick    = FindBestMatch(COMBAT_FOLDER, new[] {
+                               "Standing Melee Attack Horizontal",
+                               "Spinning Kick", "High Kick",
+                               "Sweep Kick" });
+
+        set.ChargeAttack = FindBestMatch(COMBAT_FOLDER, new[] {
+                               "Standing Aim Overdraw",
+                               "Charging", "Power Up",
+                               "Standing Aim Recoil", "Yelling" });
 
         return set;
     }
 
     /// <summary>
-    /// Find animation that best matches any of the search terms (case-insensitive substring match)
-    /// Prefers exact matches over partial matches
+    /// Find the best matching animation clip in a subfolder.
+    /// Priority: exact match on first term → exact on later terms → substring on all terms.
     /// </summary>
     private static AnimationClip FindBestMatch(string subfolder, string[] searchTerms, bool exact = false)
     {
@@ -63,38 +101,36 @@ public class AnimationLibrary
 
         if (!Directory.Exists(folderPath))
         {
-            Debug.LogWarning($"Animation folder not found: {folderPath}");
+            Debug.Log($"[AnimLib] Folder not present yet: {folderPath}");
             return null;
         }
 
-        // Get all FBX files in the folder
         var fbxFiles = Directory.GetFiles(folderPath, "*.fbx", SearchOption.TopDirectoryOnly);
-
-        foreach (var fbxPath in fbxFiles)
+        if (fbxFiles.Length == 0)
         {
-            string fbxName = Path.GetFileNameWithoutExtension(fbxPath);
-
-            // Check each search term
-            foreach (var term in searchTerms)
-            {
-                if (exact)
-                {
-                    if (fbxName.Equals(term, System.StringComparison.OrdinalIgnoreCase))
-                    {
-                        return LoadAnimationClipFromFBX(fbxPath, fbxName);
-                    }
-                }
-                else
-                {
-                    if (fbxName.Contains(term, System.StringComparison.OrdinalIgnoreCase))
-                    {
-                        return LoadAnimationClipFromFBX(fbxPath, fbxName);
-                    }
-                }
-            }
+            Debug.Log($"[AnimLib] No FBX in {folderPath} — add Mixamo clips then run NinjaStrike▶Setup.");
+            return null;
         }
 
-        Debug.LogWarning($"No animation found in {subfolder} for terms: {string.Join(", ", searchTerms)}");
+        // Pass 1: exact match (case-insensitive) on each term in priority order
+        foreach (var term in searchTerms)
+            foreach (var fbxPath in fbxFiles)
+            {
+                string name = Path.GetFileNameWithoutExtension(fbxPath);
+                if (name.Equals(term, System.StringComparison.OrdinalIgnoreCase))
+                    return LoadAnimationClipFromFBX(fbxPath, name);
+            }
+
+        // Pass 2: substring match — catches slight naming variations
+        foreach (var term in searchTerms)
+            foreach (var fbxPath in fbxFiles)
+            {
+                string name = Path.GetFileNameWithoutExtension(fbxPath);
+                if (name.IndexOf(term, System.StringComparison.OrdinalIgnoreCase) >= 0)
+                    return LoadAnimationClipFromFBX(fbxPath, name);
+            }
+
+        Debug.LogWarning($"[AnimLib] No match in '{subfolder}' for: {string.Join(" | ", searchTerms)}");
         return null;
     }
 
@@ -143,14 +179,15 @@ public class AnimationLibrary
     {
         if (!Directory.Exists(folderPath))
         {
-            Debug.LogWarning($"Folder not found: {folderPath}");
+            Debug.Log($"  (folder not present: {folderPath})");
             return;
         }
 
         var files = Directory.GetFiles(folderPath, "*.fbx");
-        foreach (var file in files)
-        {
-            Debug.Log($"  {Path.GetFileNameWithoutExtension(file)}");
-        }
+        if (files.Length == 0)
+            Debug.Log("  (no FBX files — add Mixamo clips here)");
+        else
+            foreach (var file in files)
+                Debug.Log($"  {Path.GetFileNameWithoutExtension(file)}");
     }
 }

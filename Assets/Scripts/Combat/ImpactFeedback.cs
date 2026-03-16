@@ -44,16 +44,13 @@ public class ImpactFeedback : MonoBehaviour
         // 1. Procedural Audio
         PlayImpactSound(position, intensity);
 
-        // 2. Controller Rumble (if player)
-        if (playerIndex >= 0 && playerIndex < Gamepad.all.Count)
+        // 2. Controller Rumble (if player has a claimed gamepad)
+        var pad = playerIndex >= 0 ? NinjaController.GetClaimedGamepad(playerIndex) : null;
+        if (pad != null)
         {
-            var pad = Gamepad.all[playerIndex];
-            if (pad != null)
-            {
-                float lf = GameSettings.RumbleIntensityBase * (intensity > 0.5f ? 1f : 0.2f);
-                float hf = GameSettings.RumbleIntensityBase * (intensity <= 0.5f ? 1f : 0.5f);
-                pad.SetMotorSpeeds(lf, hf);
-            }
+            float lf = GameSettings.RumbleIntensityBase * (intensity > 0.5f ? 1f : 0.2f);
+            float hf = GameSettings.RumbleIntensityBase * (intensity <= 0.5f ? 1f : 0.5f);
+            pad.SetMotorSpeeds(lf, hf);
         }
 
         // 3. Camera Shake
@@ -76,10 +73,7 @@ public class ImpactFeedback : MonoBehaviour
 
         // Reset rumble
         yield return new WaitForSecondsRealtime(GameSettings.RumbleDurationBase + 0.1f * intensity);
-        if (playerIndex >= 0 && playerIndex < Gamepad.all.Count)
-        {
-            Gamepad.all[playerIndex]?.SetMotorSpeeds(0f, 0f);
-        }
+        NinjaController.GetClaimedGamepad(playerIndex)?.SetMotorSpeeds(0f, 0f);
     }
 
     private void PlayImpactSound(Vector3 position, float intensity)

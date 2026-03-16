@@ -1,0 +1,2 @@
+#!/usr/bin/env fish
+~/Unity/Hub/Editor/6000.3.9f1/Editor/Unity -projectPath ~/Dev/game &

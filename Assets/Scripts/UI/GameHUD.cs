@@ -126,11 +126,19 @@ public class GameHUD : MonoBehaviour
         }
     }
 
+    private bool _gameOverShown = false;
+
     void Update()
     {
         TickScore();
         RefreshPlayerBars();
         RefreshTopBar();
+
+        if (!_gameOverShown && _village != null && _village.IsDestroyed)
+        {
+            _gameOverShown = true;
+            StartCoroutine(ShowGameOver());
+        }
     }
 
     void TickScore()
@@ -458,6 +466,9 @@ public class GameHUD : MonoBehaviour
             _ballScore.text = $"ORBS SAVED: {BallGoal.Instance.Score}";
         }
 
+        UpdateComboCount(_p1Combo, 0);
+        UpdateComboCount(_p2Combo, 1);
+
         UpdateContextualHints();
         UpdatePanelVisibility();
     }
@@ -593,6 +604,56 @@ public class GameHUD : MonoBehaviour
         else
         {
             bar.color = new Color(bar.color.r, bar.color.g, bar.color.b, 1f);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // GAME OVER
+    // ─────────────────────────────────────────────────────────────────────
+    IEnumerator ShowGameOver()
+    {
+        SoundManager.PlayVillageDamage(Vector3.zero);
+
+        // Dark overlay — fade in
+        var overlay = CreatePanel("GameOverOverlay", Vector2.zero, Vector2.one, new Color(0.05f, 0f, 0f, 0f));
+        overlay.transform.SetAsLastSibling();
+        var overlayImg = overlay.GetComponent<Image>();
+
+        for (float t = 0; t < 1f; t += Time.unscaledDeltaTime * 1.5f)
+        {
+            overlayImg.color = new Color(0.05f, 0f, 0f, Mathf.Lerp(0f, 0.88f, t));
+            yield return null;
+        }
+        overlayImg.color = new Color(0.05f, 0f, 0f, 0.88f);
+
+        // "THE VILLAGE FELL" headline
+        var headline = CreateLabel(overlay, "THE VILLAGE FELL", Vector2.zero, 72, GameBootstrapper.PaletteCrimson);
+        headline.alignment = TextAnchor.MiddleCenter;
+        var hRT = headline.GetComponent<RectTransform>();
+        hRT.anchorMin = Vector2.zero; hRT.anchorMax = Vector2.one;
+        hRT.offsetMin = new Vector2(0f, 80f); hRT.offsetMax = Vector2.zero;
+
+        // Score summary
+        int wave = _waveManager != null ? _waveManager.CurrentWave : 1;
+        string summary =
+            $"WAVE REACHED  {wave}\n\n" +
+            $"SCORE  {_highScore:F3}\n\n" +
+            "Press  ESC / Start  to return to menu";
+
+        var subLbl = CreateLabel(overlay, summary, new Vector2(0f, -80f), 28, Color.white);
+        subLbl.alignment = TextAnchor.MiddleCenter;
+        var sRT = subLbl.GetComponent<RectTransform>();
+        sRT.anchorMin = Vector2.zero; sRT.anchorMax = Vector2.one;
+        sRT.offsetMin = sRT.offsetMax = Vector2.zero;
+
+        // Pulse headline color forever
+        float elapsed = 0f;
+        while (true)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float pulse = (Mathf.Sin(elapsed * 2.5f) + 1f) * 0.5f;
+            headline.color = Color.Lerp(GameBootstrapper.PaletteCrimson, Color.white, pulse * 0.35f);
+            yield return null;
         }
     }
 
