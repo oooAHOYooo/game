@@ -243,8 +243,8 @@ public class GameBootstrapper : MonoBehaviour
     // ─────────────────────────────────────────────────────────────────────────
     void BuildPlayers()
     {
-        // SKY DIVE INTRO - Spawning high in the air
-        float spawnY = 300f;
+        // Spawning high above ground so they fall to terrain via Rigidbody
+        float spawnY = 50f;
 
         // Player 1 – always active (god-sized ninja on the island)
         // Try animated character first, fall back to primitive if model not found
@@ -255,7 +255,7 @@ public class GameBootstrapper : MonoBehaviour
         _player1 = BuildNinja("Player1", new Vector3(-8f, spawnY, 0), PaletteGold, false, 0);
         #endif
 
-        float spawn2Y = 300f;
+        float spawn2Y = 50f;
 
         // Player 2 – ghost AI disabled by request to allow keyboard control
         bool isGhost = false; 

@@ -10,8 +10,8 @@
 #  make open     — open Unity with this project
 # =============================================================
 
-UNITY_EXE  := /home/alexg/Unity/Hub/Editor/6000.3.9f1/Editor/Unity
-PROJECT    := $(shell pwd)
+UNITY_EXE  := C:\Program Files\Unity\Hub\Editor\6000.3.9f1\Editor\Unity.exe
+PROJECT    := .
 
 .PHONY: sync pull push status log open
 
@@ -26,6 +26,7 @@ help:
 	@echo "  make status   git status"
 	@echo "  make log      last 10 commits"
 	@echo "  make open     open Unity editor with this project"
+	@echo "  make windows  build Windows version"
 	@echo ""
 
 # ── Main: sync + compile ────────────────────────────────────
@@ -58,12 +59,16 @@ log:
 # ── Open Unity ──────────────────────────────────────────────
 open:
 	@echo "Opening Unity..."
-	@nohup "$(UNITY_EXE)" -projectPath "$(PROJECT)" &>/dev/null &
+	@powershell.exe -Command "Start-Process '$(UNITY_EXE)' -ArgumentList '-projectPath $(PROJECT)'"
 	@echo "✔  Unity is launching in the background"
 
 # ── Build Switch ────────────────────────────────────────────
 switch:
 	powershell.exe -ExecutionPolicy Bypass -File build_switch.ps1
+
+# ── Build Windows ───────────────────────────────────────────
+windows:
+	powershell.exe -ExecutionPolicy Bypass -File build_windows.ps1
 
 # ── Build Linux ARM (RPi) ───────────────────────────────────
 linux-arm:

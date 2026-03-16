@@ -65,7 +65,7 @@ public class NinjaController : MonoBehaviour
     private float       _dodgeTimer        = 0f;
     private float       _attackCooldown    = 0f;
     private float       _speedBlend        = 0f;
-    [HideInInspector] public bool  IsIntroDive       = true;
+    [HideInInspector] public bool  IsIntroDive       = false; // disabled skydiving directly to ground
     [HideInInspector] public bool  IsFlipping        = false;
 
     private GameObject  _currentWeapon;
@@ -221,11 +221,14 @@ public class NinjaController : MonoBehaviour
 
         _speedBlend = Mathf.Lerp(_speedBlend, horizontalSpeed > 0.1f ? targetSpeedScale : 0f, Time.deltaTime * 6f);
 
-        _anim.SetFloat("Speed", _speedBlend);
-        _anim.SetBool("IsFlying", IsFlying);
-        _anim.SetBool("IsAttacking", IsAttacking);
-        _anim.SetInteger("AttackType", IsAttacking ? LastAttackType : 0);
-        _anim.SetBool("IsChargingKi", IsChargingKi);
+        if (_anim.runtimeAnimatorController != null && _anim.isActiveAndEnabled)
+        {
+            _anim.SetFloat("Speed", _speedBlend);
+            _anim.SetBool("IsFlying", IsFlying);
+            _anim.SetBool("IsAttacking", IsAttacking);
+            _anim.SetInteger("AttackType", IsAttacking ? LastAttackType : 0);
+            _anim.SetBool("IsChargingKi", IsChargingKi);
+        }
 
         // Procedural Animation for Primitives
         if (_body != null && _armL != null) 
@@ -403,11 +406,16 @@ public class NinjaController : MonoBehaviour
         if (_pad != null)
         {
             var ls = _pad.leftStick.ReadValue();
-            if (ls.sqrMagnitude > 0.1f) compositeMove = ls;
+            // Higher deadzone (0.15 sqrMagnitude = ~0.38 magnitude) to prevent "auto moving" from stick drift
+            // Also, only use gamepad stick if keyboard isn't currently providing input, to avoid conflicts
+            if (ls.sqrMagnitude > 0.15f && compositeMove.sqrMagnitude < 0.01f)
+            {
+                compositeMove = ls;
+            }
             
             // Altitude control
             float rsY = _pad.rightStick.ReadValue().y;
-            if (Mathf.Abs(rsY) > 0.1f) _verticalInput = rsY;
+            if (Mathf.Abs(rsY) > 0.15f) _verticalInput = rsY;
             
             // D-Pad backup for altitude
             if (_pad.dpad.up.isPressed) _verticalInput = 1f;
@@ -430,10 +438,10 @@ public class NinjaController : MonoBehaviour
 
     // ─────────────────────────────────────────────────────────────────────
     // MOVEMENT
-    // ─────────────────────────────────────────────────────────────────────
     void HandleMovement()
     {
-        if (_moveInput.sqrMagnitude < 0.01f) return;
+        // Update damping (only walk uses high ground drag; falling uses air drag to prevent slow motion fallback)
+        _rb.linearDamping = IsGrounded ? GroundDrag : AirDrag;
 
         // Camera-relative movement
         var cam = Camera.allCameras.Length > PlayerIndex ? Camera.allCameras[PlayerIndex] : Camera.main;
@@ -441,18 +449,28 @@ public class NinjaController : MonoBehaviour
         Vector3 camRight   = cam != null ? cam.transform.right : Vector3.right;
 
         Vector3 worldDir = camForward * _moveInput.z + camRight * _moveInput.x;
-        worldDir.Normalize();
+        if (worldDir.sqrMagnitude > 1f) worldDir.Normalize();
 
-        float speed = IsFlying ? GameSettings.PlayerAirSpeed : GameSettings.PlayerGroundSpeed;
-        _rb.linearDamping = IsFlying ? AirDrag : GroundDrag;
-
-        Vector3 targetVel = worldDir * speed;
-        Vector3 currentHoriz = new Vector3(_rb.linearVelocity.x, 0, _rb.linearVelocity.z);
-        Vector3 velDiff = targetVel - currentHoriz;
-
-        // Apply a force towards target velocity (UFC5 feel: snappy but momentum-aware)
-        float accel = IsGrounded ? 40f : 22f;
-        _rb.AddForce(velDiff * accel, ForceMode.Acceleration);
+        if (IsGrounded && !IsFlying)
+        {
+            // Direct velocity setting for strict 3rd person feel (NO SLIDING/GLIDING)
+            Vector3 vel = worldDir * GameSettings.PlayerGroundSpeed;
+            vel.y = _rb.linearVelocity.y; // Keep vertical gravity
+            _rb.linearVelocity = vel;
+        }
+        else
+        {
+            // Aerial / Flight momentum-based movement
+            if (_moveInput.sqrMagnitude > 0.01f)
+            {
+                float speed = GameSettings.PlayerAirSpeed;
+                Vector3 targetVel = worldDir * speed;
+                Vector3 currentHoriz = new Vector3(_rb.linearVelocity.x, 0, _rb.linearVelocity.z);
+                Vector3 velDiff = targetVel - currentHoriz;
+                
+                _rb.AddForce(velDiff * 22f, ForceMode.Acceleration);
+            }
+        }
 
         // Face movement direction
         if (worldDir.sqrMagnitude > 0.01f)
@@ -466,10 +484,11 @@ public class NinjaController : MonoBehaviour
             }
             else
             {
-                transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(worldDir), 14f * Time.fixedDeltaTime);
+                transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(worldDir), 20f * Time.fixedDeltaTime);
             }
         }
     }
+
 
     // ─────────────────────────────────────────────────────────────────────
     // JUMP & FLIGHT
@@ -502,14 +521,21 @@ public class NinjaController : MonoBehaviour
         if (_jumpPressed && IsGrounded && !IsFlying)
         {
             _rb.AddForce(Vector3.up * JumpForce, ForceMode.VelocityChange);
-            IsFlying = true;
+        }
+        else if (_jumpPressed && !IsGrounded)
+        {
+            // [Flight Temporarily Disabled by Request]
+            // IsFlying = !IsFlying;
+            // 
+            // if (IsFlying)
+            // {
+            //     _rb.linearVelocity = new Vector3(_rb.linearVelocity.x, Mathf.Max(2f, _rb.linearVelocity.y), _rb.linearVelocity.z);
+            // }
         }
 
-        // Flight: right stick Y controls altitude
-        if (IsFlying || !IsGrounded)
+        // Flight: right stick Y controls altitude or D-Pad
+        if (IsFlying)
         {
-            IsFlying = true;
-
             if (_verticalInput > 0.3f && transform.position.y < GameSettings.PlayerMaxFlightAltitude)
             {
                 _rb.AddForce(Vector3.up * AscendForce * _verticalInput, ForceMode.Acceleration);
@@ -518,25 +544,24 @@ public class NinjaController : MonoBehaviour
             {
                 _rb.AddForce(Vector3.down * DescendForce * Mathf.Abs(_verticalInput), ForceMode.Acceleration);
             }
-            else if (IsFlying)
+            else
             {
                 // Hover — counteract gravity partially
                 float gravComp = -Physics.gravity.y * _rb.mass * 0.85f * GameSettings.GravityMultiplier;
                 _rb.AddForce(Vector3.up * gravComp, ForceMode.Force);
             }
+        }
 
+        // Apply extra gravity logic (jump hang and heavy feel) when not grounded
+        if (!IsGrounded)
+        {
             // 2. JUMP HANG - Reduce gravity at the peak for better "Nintendo" feel
             float yVel = _rb.linearVelocity.y;
             float gravityScale = 1f;
-            if (Mathf.Abs(yVel) < 2f && !IsGrounded) gravityScale = 0.5f;
+            if (Mathf.Abs(yVel) < 2f) gravityScale = 0.5f;
 
             // Apply extra gravity for "heavy" feel if not hovering/ascending, but respect the hang
-            if (!IsGrounded)
-            {
-                _rb.AddForce(Physics.gravity * (GameSettings.GravityMultiplier * gravityScale - 1f), ForceMode.Acceleration);
-            }
-
-            // Landing check handled in CheckGrounded
+            _rb.AddForce(Physics.gravity * (GameSettings.GravityMultiplier * gravityScale - 1f), ForceMode.Acceleration);
         }
     }
 

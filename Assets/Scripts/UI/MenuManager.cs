@@ -68,7 +68,7 @@ public class MenuManager : MonoBehaviour
         verLbl.alignment       = TextAnchor.MiddleRight;
 
         // ─── Title — Top Left ─────────────────────────────────────────────
-        var titleLbl = MakeLabel(_menuRoot, "NINJA\nISLAND", 96, Color.white);
+        var titleLbl = MakeLabel(_menuRoot, "NINJA\nSTRIKE", 96, Color.white);
         titleLbl.fontStyle  = FontStyle.Bold;
         titleLbl.lineSpacing = 0.85f;
         titleLbl.alignment  = TextAnchor.UpperLeft;

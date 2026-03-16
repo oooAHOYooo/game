@@ -185,9 +185,12 @@ public class EnemyAI : MonoBehaviour
         float targetSpeed = horizontalSpeed / MoveSpeed;
         _speedBlend = Mathf.Lerp(_speedBlend, targetSpeed > 0.1f ? targetSpeed : 0f, Time.deltaTime * 5f);
 
-        _anim.SetFloat("Speed", _speedBlend);
-        _anim.SetBool("IsFlying", _base.IsFlying);
-        _anim.SetBool("IsAttacking", _isActing);
+        if (_anim.runtimeAnimatorController != null && _anim.isActiveAndEnabled)
+        {
+            _anim.SetFloat("Speed", _speedBlend);
+            _anim.SetBool("IsFlying", _base.IsFlying);
+            _anim.SetBool("IsAttacking", _isActing);
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────
