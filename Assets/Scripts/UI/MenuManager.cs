@@ -13,8 +13,12 @@ public class MenuManager : MonoBehaviour
 {
     private GameObject _menuRoot;
     private Button     _playButton;
+    private Button     _onePlayerButton;
+    private Button     _twoPlayerButton;
     private Button     _creditsButton;
     private Button     _quitButton;
+    private GameObject _modeSelectMenu;
+    private GameObject _mainMenu;
 
     void Start()
     {
@@ -68,7 +72,7 @@ public class MenuManager : MonoBehaviour
         verLbl.alignment       = TextAnchor.MiddleRight;
 
         // ─── Title — Top Left ─────────────────────────────────────────────
-        var titleLbl = MakeLabel(_menuRoot, "NINJA\nISLAND", 96, Color.white);
+        var titleLbl = MakeLabel(_menuRoot, "NINJA\nSTRIKE", 96, Color.white);
         titleLbl.fontStyle  = FontStyle.Bold;
         titleLbl.lineSpacing = 0.85f;
         titleLbl.alignment  = TextAnchor.UpperLeft;
@@ -93,16 +97,45 @@ public class MenuManager : MonoBehaviour
         subRT.anchoredPosition = new Vector2(60f, -340f);
         subRT.sizeDelta        = new Vector2(600f, 30f);
 
+        // ─── Main Menu (stored for show/hide) ────────────────────────────
+        _mainMenu = new GameObject("MainMenu");
+        _mainMenu.transform.SetParent(_menuRoot.transform, false);
+
         // ─── Button Stack (left-bottom area) ─────────────────────────────
         // Anchor buttons to the lower-left quadrant
-        _playButton    = MakeMenuButton(_menuRoot, "PLAY",    new Vector2(60f, -450f), () => GameBootstrapper.Instance.StartGame());
-        _creditsButton = MakeMenuButton(_menuRoot, "CREDITS", new Vector2(60f, -520f), () => Debug.Log("Credits coming soon!"));
-        _quitButton    = MakeMenuButton(_menuRoot, "EXIT",    new Vector2(60f, -590f), () => GameBootstrapper.Instance.QuitGame());
+        _playButton     = MakeMenuButton(_mainMenu, "PLAY",    new Vector2(60f, -450f), () => ShowModeSelect());
+        _creditsButton  = MakeMenuButton(_mainMenu, "CREDITS", new Vector2(60f, -520f), () => Debug.Log("Credits coming soon!"));
+        _quitButton     = MakeMenuButton(_mainMenu, "EXIT",    new Vector2(60f, -590f), () => GameBootstrapper.Instance.QuitGame());
 
         // ─── Navigation wiring (D-Pad / keyboard arrows) ─────────────────
         SetNav(_playButton,    _creditsButton, _quitButton);
         SetNav(_creditsButton, _quitButton,    _playButton);
         SetNav(_quitButton,    _playButton,    _creditsButton);
+
+        // ─── Mode Select Menu (hidden initially) ──────────────────────────
+        _modeSelectMenu = new GameObject("ModeSelectMenu");
+        _modeSelectMenu.transform.SetParent(_menuRoot.transform, false);
+        _modeSelectMenu.SetActive(false);
+
+        var titleLbl2 = MakeLabel(_modeSelectMenu, "SELECT MODE", 48, Color.white);
+        titleLbl2.fontStyle  = FontStyle.Bold;
+        titleLbl2.alignment  = TextAnchor.UpperLeft;
+        var titleRT2 = titleLbl2.GetComponent<RectTransform>();
+        titleRT2.anchorMin        = new Vector2(0f, 1f);
+        titleRT2.anchorMax        = new Vector2(0.36f, 1f);
+        titleRT2.pivot            = new Vector2(0f, 1f);
+        titleRT2.anchoredPosition = new Vector2(60f, -50f);
+        titleRT2.sizeDelta        = new Vector2(700f, 160f);
+
+        MakeRule(_modeSelectMenu, new Vector2(60f, -175f), new Vector2(380f, 2f));
+
+        _onePlayerButton  = MakeMenuButton(_modeSelectMenu, "1 PLAYER",    new Vector2(60f, -280f), () => SelectMode(false));
+        _twoPlayerButton  = MakeMenuButton(_modeSelectMenu, "2 PLAYERS",   new Vector2(60f, -350f), () => SelectMode(true));
+        var backButton    = MakeMenuButton(_modeSelectMenu, "BACK",        new Vector2(60f, -420f), () => HideModeSelect());
+
+        SetNav(_onePlayerButton,  _twoPlayerButton,  backButton);
+        SetNav(_twoPlayerButton,  backButton,        _onePlayerButton);
+        SetNav(backButton,        _onePlayerButton,  _twoPlayerButton);
 
         // ─── Credits (bottom left) ────────────────────────────────────────
         var credLbl = MakeLabel(_menuRoot, "produced by barnacle studios  |  created by alex gonzalez", 12, new Color(0.65f, 0.65f, 0.65f, 0.9f));
@@ -123,12 +156,38 @@ public class MenuManager : MonoBehaviour
     public void ShowMenu()
     {
         _menuRoot.SetActive(true);
+        _mainMenu.SetActive(true);
+        _modeSelectMenu.SetActive(false);
         Cursor.visible   = true;
         Cursor.lockState = CursorLockMode.None;
         Time.timeScale   = 0f;
 
         if (EventSystem.current != null && _playButton != null)
             EventSystem.current.SetSelectedGameObject(_playButton.gameObject);
+    }
+
+    void ShowModeSelect()
+    {
+        _mainMenu.SetActive(false);
+        _modeSelectMenu.SetActive(true);
+
+        if (EventSystem.current != null)
+            EventSystem.current.SetSelectedGameObject(_onePlayerButton.gameObject);
+    }
+
+    void HideModeSelect()
+    {
+        _mainMenu.SetActive(true);
+        _modeSelectMenu.SetActive(false);
+
+        if (EventSystem.current != null && _playButton != null)
+            EventSystem.current.SetSelectedGameObject(_playButton.gameObject);
+    }
+
+    void SelectMode(bool isTwoPlayer)
+    {
+        GameBootstrapper.IsTwoPlayerMode = isTwoPlayer;
+        GameBootstrapper.Instance.StartGame();
     }
 
     public void HideMenu()

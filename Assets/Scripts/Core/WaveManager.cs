@@ -13,11 +13,15 @@ public class WaveManager : MonoBehaviour
     public Village    IslandVillage;  // village HP & celebration
 
     // ── Wave config ───────────────────────────────────────────────────────
+    public const int MaxWaves = 5;
     private const float SpawnEdgeRadius       = 160f;  // ocean edge of island
     private const float IntermissionDuration  = 5f;
     private const float WaveClearPause        = 3f;
     private const float VillageDamageRadius   = 25f;   // if enemy gets this close, village takes damage
     private const float REINFORCEMENT_DELAY   = 4f;    // seconds between mid-wave reinforcement checks
+
+    // ── Victory event ──────────────────────────────────────────────────────
+    public event System.Action OnVictory;
 
     // ── State ─────────────────────────────────────────────────────────────
     public  int    CurrentWave    = 0;
@@ -50,6 +54,15 @@ public class WaveManager : MonoBehaviour
 
             yield return StartCoroutine(SpawnWave(CurrentWave));
             yield return StartCoroutine(WaitForWaveClear());
+
+            // Check for victory: if we just cleared wave MaxWaves-1, the player wins
+            if (CurrentWave >= MaxWaves - 1)
+            {
+                yield return StartCoroutine(Intermission());
+                OnVictory?.Invoke();
+                yield break;
+            }
+
             yield return StartCoroutine(Intermission());
             CurrentWave++;
         }

@@ -71,7 +71,7 @@ public class NinjaController : MonoBehaviour
     private float       _dodgeTimer        = 0f;
     private float       _attackCooldown    = 0f;
     private float       _speedBlend        = 0f;
-    [HideInInspector] public bool  IsIntroDive       = true;
+    [HideInInspector] public bool  IsIntroDive       = false;
     [HideInInspector] public bool  IsFlipping        = false;
 
     private GameObject  _currentWeapon;

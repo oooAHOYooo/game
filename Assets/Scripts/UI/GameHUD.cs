@@ -2,6 +2,9 @@ using UnityEngine;
 using UnityEngine.UI;
 using System.Collections;
 using System.Collections.Generic;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 /// <summary>
 /// GameHUD — cinematic runtime UI built entirely in code.
@@ -106,6 +109,8 @@ public class GameHUD : MonoBehaviour
 
     IEnumerator FindPlayersLoop()
     {
+        bool victoryWired = false;
+
         while (true)
         {
             var allPlayers = FindObjectsByType<PlayerHealth>(FindObjectsSortMode.None);
@@ -120,13 +125,21 @@ public class GameHUD : MonoBehaviour
                 _village = FindAnyObjectByType<Village>();
 
             if (_waveManager == null)
+            {
                 _waveManager = FindAnyObjectByType<WaveManager>();
+                if (_waveManager != null && !victoryWired)
+                {
+                    _waveManager.OnVictory += TriggerVictory;
+                    victoryWired = true;
+                }
+            }
 
             yield return new WaitForSeconds(0.5f);
         }
     }
 
     private bool _gameOverShown = false;
+    private bool _victoryShown = false;
 
     void Update()
     {
@@ -612,7 +625,8 @@ public class GameHUD : MonoBehaviour
     // ─────────────────────────────────────────────────────────────────────
     IEnumerator ShowGameOver()
     {
-        SoundManager.PlayVillageDamage(Vector3.zero);
+        Time.timeScale = 0f;
+        SoundManager.PlayGameOver();
 
         // Dark overlay — fade in
         var overlay = CreatePanel("GameOverOverlay", Vector2.zero, Vector2.one, new Color(0.05f, 0f, 0f, 0f));
@@ -631,20 +645,23 @@ public class GameHUD : MonoBehaviour
         headline.alignment = TextAnchor.MiddleCenter;
         var hRT = headline.GetComponent<RectTransform>();
         hRT.anchorMin = Vector2.zero; hRT.anchorMax = Vector2.one;
-        hRT.offsetMin = new Vector2(0f, 80f); hRT.offsetMax = Vector2.zero;
+        hRT.offsetMin = new Vector2(0f, 100f); hRT.offsetMax = Vector2.zero;
 
         // Score summary
         int wave = _waveManager != null ? _waveManager.CurrentWave : 1;
         string summary =
             $"WAVE REACHED  {wave}\n\n" +
-            $"SCORE  {_highScore:F3}\n\n" +
-            "Press  ESC / Start  to return to menu";
+            $"SCORE  {_highScore:F3}";
 
-        var subLbl = CreateLabel(overlay, summary, new Vector2(0f, -80f), 28, Color.white);
+        var subLbl = CreateLabel(overlay, summary, new Vector2(0f, -40f), 28, Color.white);
         subLbl.alignment = TextAnchor.MiddleCenter;
         var sRT = subLbl.GetComponent<RectTransform>();
         sRT.anchorMin = Vector2.zero; sRT.anchorMax = Vector2.one;
         sRT.offsetMin = sRT.offsetMax = Vector2.zero;
+
+        // Buttons
+        CreateGameOverButton(overlay, "PLAY AGAIN", new Vector2(-100f, -200f), RestartGame);
+        CreateGameOverButton(overlay, "QUIT", new Vector2(100f, -200f), QuitGame);
 
         // Pulse headline color forever
         float elapsed = 0f;
@@ -655,6 +672,138 @@ public class GameHUD : MonoBehaviour
             headline.color = Color.Lerp(GameBootstrapper.PaletteCrimson, Color.white, pulse * 0.35f);
             yield return null;
         }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // VICTORY SCREEN
+    // ─────────────────────────────────────────────────────────────────────
+    public void TriggerVictory()
+    {
+        if (_victoryShown) return;
+        _victoryShown = true;
+        StartCoroutine(ShowVictory());
+    }
+
+    IEnumerator ShowVictory()
+    {
+        Time.timeScale = 0f;
+        SoundManager.PlayVictory();
+        SoundManager.PlayVillagerCheer();
+
+        // Dark navy overlay
+        var overlay = CreatePanel("VictoryOverlay", Vector2.zero, Vector2.one, new Color(0f, 0.05f, 0.15f, 0f));
+        overlay.transform.SetAsLastSibling();
+        var overlayImg = overlay.GetComponent<Image>();
+
+        // Fade in overlay
+        for (float t = 0; t < 1f; t += Time.unscaledDeltaTime * 1.5f)
+        {
+            overlayImg.color = new Color(0f, 0.05f, 0.15f, Mathf.Lerp(0f, 0.88f, t));
+            yield return null;
+        }
+        overlayImg.color = new Color(0f, 0.05f, 0.15f, 0.88f);
+
+        // "YOU SAVED THE VILLAGE!" headline
+        var headline = CreateLabel(overlay, "YOU SAVED\nTHE VILLAGE!", Vector2.zero, 72, GameBootstrapper.PaletteGold);
+        headline.alignment = TextAnchor.MiddleCenter;
+        var hRT = headline.GetComponent<RectTransform>();
+        hRT.anchorMin = Vector2.zero; hRT.anchorMax = Vector2.one;
+        hRT.offsetMin = new Vector2(0f, 100f); hRT.offsetMax = Vector2.zero;
+
+        // Wave survived subtitle
+        string subtitle = $"WAVE {WaveManager.MaxWaves} SURVIVED!";
+        var subheading = CreateLabel(overlay, subtitle, new Vector2(0f, 0f), 36, GameBootstrapper.PaletteCyan);
+        subheading.alignment = TextAnchor.MiddleCenter;
+        var sbRT = subheading.GetComponent<RectTransform>();
+        sbRT.anchorMin = Vector2.zero; sbRT.anchorMax = Vector2.one;
+        sbRT.offsetMin = new Vector2(0f, 20f); sbRT.offsetMax = Vector2.zero;
+
+        // Score summary
+        string summary = $"SCORE  {_highScore:F3}";
+        var scoreLbl = CreateLabel(overlay, summary, new Vector2(0f, -40f), 28, Color.white);
+        scoreLbl.alignment = TextAnchor.MiddleCenter;
+        var srRT = scoreLbl.GetComponent<RectTransform>();
+        srRT.anchorMin = Vector2.zero; srRT.anchorMax = Vector2.one;
+        srRT.offsetMin = srRT.offsetMax = Vector2.zero;
+
+        // Buttons
+        CreateGameOverButton(overlay, "PLAY AGAIN", new Vector2(-100f, -200f), RestartGame);
+        CreateGameOverButton(overlay, "QUIT", new Vector2(100f, -200f), QuitGame);
+
+        // Pulse headline color forever
+        float elapsed = 0f;
+        while (true)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float pulse = (Mathf.Sin(elapsed * 2.5f) + 1f) * 0.5f;
+            headline.color = Color.Lerp(GameBootstrapper.PaletteGold, Color.white, pulse * 0.35f);
+            yield return null;
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // GAME FLOW HELPERS
+    // ─────────────────────────────────────────────────────────────────────
+    void RestartGame()
+    {
+        Time.timeScale = 1f;
+        UnityEngine.SceneManagement.SceneManager.LoadScene(
+            UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex);
+    }
+
+    void QuitGame()
+    {
+        Time.timeScale = 1f;
+#if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+#else
+        Application.Quit();
+#endif
+    }
+
+    void CreateGameOverButton(GameObject parent, string label, Vector2 anchoredPos, System.Action onClick)
+    {
+        var btnObj = new GameObject("Btn_" + label.Replace(" ", "_"));
+        btnObj.transform.SetParent(parent.transform, false);
+
+        var btnImg = btnObj.AddComponent<Image>();
+        btnImg.color = new Color(0.1f, 0.2f, 0.3f, 0.9f);
+
+        var btnRT = btnObj.GetComponent<RectTransform>();
+        btnRT.anchorMin = new Vector2(0.5f, 0f);
+        btnRT.anchorMax = new Vector2(0.5f, 0f);
+        btnRT.pivot = new Vector2(0.5f, 0f);
+        btnRT.anchoredPosition = anchoredPos;
+        btnRT.sizeDelta = new Vector2(160f, 50f);
+
+        // Button text
+        var textObj = new GameObject("Label");
+        textObj.transform.SetParent(btnObj.transform, false);
+        var txt = textObj.AddComponent<Text>();
+        txt.text = label;
+        txt.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        txt.fontStyle = FontStyle.Bold;
+        txt.fontSize = 18;
+        txt.color = GameBootstrapper.PaletteGold;
+        txt.alignment = TextAnchor.MiddleCenter;
+
+        var tRT = txt.GetComponent<RectTransform>();
+        tRT.anchorMin = Vector2.zero;
+        tRT.anchorMax = Vector2.one;
+        tRT.offsetMin = Vector2.zero;
+        tRT.offsetMax = Vector2.zero;
+
+        // Button interaction
+        var btn = btnObj.AddComponent<Button>();
+        btn.onClick.AddListener(() => onClick?.Invoke());
+        btn.targetGraphic = btnImg;
+
+        // Color transition on hover
+        var colors = btn.colors;
+        colors.normalColor = new Color(0.1f, 0.2f, 0.3f, 0.9f);
+        colors.highlightedColor = new Color(0.2f, 0.3f, 0.5f, 1f);
+        colors.pressedColor = new Color(0.05f, 0.1f, 0.2f, 1f);
+        btn.colors = colors;
     }
 
     // ─────────────────────────────────────────────────────────────────────

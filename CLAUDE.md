@@ -9,7 +9,7 @@ All UI is procedural (no prefabs). Uses Unity new Input System.
 
 ## Priority TODO (for kids to love it)
 1. ~~**Sound effects**~~ ✅ **DONE** — `SoundManager.cs` added. Procedural sounds hooked up: enemy death, laser charge+fire, wave start alert, wave clear fanfare, village damage alarm, player death ditty, respawn twinkle, villager cheer. Hit sounds already in `ImpactFeedback.cs`.
-2. **Win/Lose screen** — "YOU SAVED THE VILLAGE!" or "THE VILLAGE FELL" with score. Village destruction currently does nothing (no game-over).
+2. ~~**Win/Lose screen**~~ ✅ **DONE** — "YOU SAVED THE VILLAGE!" and "THE VILLAGE FELL" with score, buttons to restart/quit, game paused during screens.
 3. **Controller rumble** — `Gamepad.current.SetMotorSpeeds(...)` on every hit. Kids love physical feedback.
 4. **Bigger hit reactions** — screen flash on kill, enemies ragdoll into ocean. Makes difference between "ok" and "AGAIN AGAIN AGAIN".
 5. **Totem healing** — stand on totem to heal between waves; villagers cheer. Gives kids a clear goal between fights.
@@ -20,6 +20,13 @@ All UI is procedural (no prefabs). Uses Unity new Input System.
 10. **Wave 1 tutorial prompts** — 1–2 on-screen hints ("PUNCH THEM → J / RB") for 1st graders.
 
 ## Recent Work
+**Win/Lose screens + 5-wave victory condition (2026-03-16)**
+- `WaveManager.cs` — Added `MaxWaves = 5` constant; `OnVictory` event fires after wave 5 cleared
+- `SoundManager.cs` — Added `PlayGameOver()` (slow descending G4→F4→D4→G3 dirge) and `PlayVictory()` (ascending C4→E4→G4→C5 fanfare)
+- `GameHUD.cs` — Fixed `ShowGameOver()` to pause time, show buttons for "PLAY AGAIN"/"QUIT"; added `ShowVictory()` coroutine with gold pulsing headline, victory sound + villager cheer
+- `MenuManager.cs` — Changed title from "NINJA ISLAND" to "NINJA STRIKE"
+- `NinjaController.cs` — Fixed `IsIntroDive` defaulting to `true` (was causing wind streaks on startup); now defaults to `false`
+
 **Mixamo animation pipeline + fighting game inputs (2026-03-13)**
 - Downloaded 9 Mixamo FBX animations + X Bot character model; tracked in git under `Assets/Art/`
 - `sort_mixamo.sh` — bash script: drop Mixamo downloads in `~/Downloads`, run script, files land in correct project folders with correct names

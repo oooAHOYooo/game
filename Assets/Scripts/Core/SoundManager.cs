@@ -74,6 +74,14 @@ public class SoundManager : MonoBehaviour
     public static void PlayVillagerCheer()
         => Instance?.DoVillagerCheer();
 
+    /// <summary>Game-over sting: slow descending four-note dirge (G4→F4→D4→G3).</summary>
+    public static void PlayGameOver()
+        => Instance?.StartCoroutine(Instance.GameOverRoutine());
+
+    /// <summary>Victory fanfare: ascending triumph sting (C4→E4→G4→C5).</summary>
+    public static void PlayVictory()
+        => Instance?.StartCoroutine(Instance.VictoryRoutine());
+
     // ═══════════════════════════════════════════════════════════════════════
     // SOUND IMPLEMENTATIONS
     // ═══════════════════════════════════════════════════════════════════════
@@ -209,6 +217,52 @@ public class SoundManager : MonoBehaviour
             PlayAt(s, noteDur, pos, 0.8f);
             yield return new WaitForSecondsRealtime(noteDur + 0.02f);
         }
+    }
+
+    // ── Game Over: slow descending death dirge ─────────────────────────────
+    IEnumerator GameOverRoutine()
+    {
+        float[] freqs = { 392f, 349f, 294f, 196f }; // G4 F4 D4 G3
+        float[] spacings = { 0.18f, 0.18f, 0.18f };
+
+        for (int i = 0; i < freqs.Length; i++)
+        {
+            float f = freqs[i];
+            float noteDur = 0.4f;
+            int n = Mathf.FloorToInt(SR * noteDur);
+            float[] s = new float[n];
+
+            for (int j = 0; j < n; j++)
+            {
+                float t  = (float)j / SR;
+                float tN = t / noteDur;
+                float env = Mathf.Exp(-t * 2.5f); // slow decay for dirge
+                s[j] = Mathf.Sin(2f * Mathf.PI * f * t) * env * 0.75f;
+                // Add minor harmonic for sadness
+                s[j] += Mathf.Sin(2f * Mathf.PI * f * 1.5f * t) * env * 0.2f;
+            }
+            PlayTone2D(f, noteDur, 0.8f);
+
+            if (i < spacings.Length)
+                yield return new WaitForSecondsRealtime(spacings[i]);
+        }
+    }
+
+    // ── Victory: ascending triumph sting ───────────────────────────────────
+    IEnumerator VictoryRoutine()
+    {
+        float[] freqs = { 261f, 329f, 392f, 523f }; // C4 E4 G4 C5
+        float spacing = 0.2f;
+
+        foreach (float f in freqs)
+        {
+            PlayTone2D(f, 0.16f, 0.85f);
+            yield return new WaitForSecondsRealtime(spacing);
+        }
+
+        // Final triumphant chord burst
+        yield return new WaitForSecondsRealtime(0.1f);
+        PlayTone2D(261f, 0.22f, 0.9f);
     }
 
     // ── Respawn: ascending sparkle twinkle ───────────────────────────────
