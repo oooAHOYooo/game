@@ -25,6 +25,7 @@ public class GameBootstrapper : MonoBehaviour
 
     [Header("Runtime References (filled automatically)")]
     public static GameBootstrapper Instance;
+    public static bool IsTwoPlayerMode = true;  // 1-player by default uses AI companion
 
     private IslandGenerator _island;
     private Village         _village;
@@ -244,7 +245,6 @@ public class GameBootstrapper : MonoBehaviour
     void BuildPlayers()
     {
         float spawnY = 300f;
-        bool isGhost = false;
 
         // Try animated Mixamo character first, fall back to primitives.
         // Editor:   uses AssetDatabase (no Resources overhead).
@@ -254,13 +254,18 @@ public class GameBootstrapper : MonoBehaviour
         #if UNITY_EDITOR
         _player1 = TryBuildAnimatedNinja("Player1", new Vector3(-8f, spawnY, 0), PaletteGold, false, 0)
                 ?? BuildNinja("Player1", new Vector3(-8f, spawnY, 0), PaletteGold, false, 0);
-        _player2Ghost = TryBuildAnimatedNinja("Player2", new Vector3(8f, spawnY, 0), PaletteGhostBlue, isGhost, 1)
-                     ?? BuildNinja("Player2", new Vector3(8f, spawnY, 0), PaletteGhostBlue, isGhost, 1);
+        // Player 2: in 1-player mode, isGhost=true (AI); in 2-player mode, isGhost=false (human input)
+        bool player2IsGhost = !IsTwoPlayerMode;
+        Color player2Color = player2IsGhost ? new Color(0.8f, 0.8f, 1f, 0.8f) : PaletteGhostBlue;  // lighter color for AI
+        _player2Ghost = TryBuildAnimatedNinja("Player2", new Vector3(8f, spawnY, 0), player2Color, player2IsGhost, 1)
+                     ?? BuildNinja("Player2", new Vector3(8f, spawnY, 0), player2Color, player2IsGhost, 1);
         #else
         _player1 = TryBuildAnimatedNinjaRuntime("Player1", new Vector3(-8f, spawnY, 0), PaletteGold, false, 0)
                 ?? BuildNinja("Player1", new Vector3(-8f, spawnY, 0), PaletteGold, false, 0);
-        _player2Ghost = TryBuildAnimatedNinjaRuntime("Player2", new Vector3(8f, spawnY, 0), PaletteGhostBlue, isGhost, 1)
-                     ?? BuildNinja("Player2", new Vector3(8f, spawnY, 0), PaletteGhostBlue, isGhost, 1);
+        bool player2IsGhost = !IsTwoPlayerMode;
+        Color player2Color = player2IsGhost ? new Color(0.8f, 0.8f, 1f, 0.8f) : PaletteGhostBlue;
+        _player2Ghost = TryBuildAnimatedNinjaRuntime("Player2", new Vector3(8f, spawnY, 0), player2Color, player2IsGhost, 1)
+                     ?? BuildNinja("Player2", new Vector3(8f, spawnY, 0), player2Color, player2IsGhost, 1);
         #endif
     }
 
@@ -712,35 +717,54 @@ public class GameBootstrapper : MonoBehaviour
     {
         _cameraRig = new GameObject("CameraRig");
 
-        // Player 1 camera – left half (or full if single cam)
-        var cam1Obj  = new GameObject("Camera_P1");
-        cam1Obj.transform.SetParent(_cameraRig.transform);
-        var cam1 = cam1Obj.AddComponent<Camera>();
-        cam1.rect = new Rect(0f, 0f, 0.5f, 1f);
-        cam1Obj.transform.position = new Vector3(-8f, 20f, -28f);
-        cam1Obj.transform.LookAt(Vector3.zero);
-        var camCtrl1 = cam1Obj.AddComponent<SplitScreenCamera>();
-        camCtrl1.TargetTransform = _player1 != null ? _player1.transform : null;
-        camCtrl1.Distance        = -GameSettings.CameraOffset.z;
-        camCtrl1.HeightOffset    = GameSettings.CameraOffset.y;
-        camCtrl1.SideOffset      = GameSettings.CameraOffset.x;
-        cam1Obj.AddComponent<HDAdditionalCameraData>();
-        cam1.farClipPlane = 600f;  // see the whole island
+        if (IsTwoPlayerMode)
+        {
+            // Split-screen: Player 1 camera – left half, Player 2 camera – right half
+            var cam1Obj  = new GameObject("Camera_P1");
+            cam1Obj.transform.SetParent(_cameraRig.transform);
+            var cam1 = cam1Obj.AddComponent<Camera>();
+            cam1.rect = new Rect(0f, 0f, 0.5f, 1f);
+            cam1Obj.transform.position = new Vector3(-8f, 20f, -28f);
+            cam1Obj.transform.LookAt(Vector3.zero);
+            var camCtrl1 = cam1Obj.AddComponent<SplitScreenCamera>();
+            camCtrl1.TargetTransform = _player1 != null ? _player1.transform : null;
+            camCtrl1.Distance        = -GameSettings.CameraOffset.z;
+            camCtrl1.HeightOffset    = GameSettings.CameraOffset.y;
+            camCtrl1.SideOffset      = GameSettings.CameraOffset.x;
+            cam1Obj.AddComponent<HDAdditionalCameraData>();
+            cam1.farClipPlane = 600f;
 
-        // Player 2 camera – right half
-        var cam2Obj  = new GameObject("Camera_P2");
-        cam2Obj.transform.SetParent(_cameraRig.transform);
-        var cam2 = cam2Obj.AddComponent<Camera>();
-        cam2.rect = new Rect(0.5f, 0f, 0.5f, 1f);
-        cam2Obj.transform.position = new Vector3(8f, 20f, -28f);
-        cam2Obj.transform.LookAt(Vector3.zero);
-        var camCtrl2 = cam2Obj.AddComponent<SplitScreenCamera>();
-        camCtrl2.TargetTransform = _player2Ghost != null ? _player2Ghost.transform : null;
-        camCtrl2.Distance        = -GameSettings.CameraOffset.z;
-        camCtrl2.HeightOffset    = GameSettings.CameraOffset.y;
-        camCtrl2.SideOffset      = GameSettings.CameraOffset.x;
-        cam2Obj.AddComponent<HDAdditionalCameraData>();
-        cam2.farClipPlane = 600f;
+            var cam2Obj  = new GameObject("Camera_P2");
+            cam2Obj.transform.SetParent(_cameraRig.transform);
+            var cam2 = cam2Obj.AddComponent<Camera>();
+            cam2.rect = new Rect(0.5f, 0f, 0.5f, 1f);
+            cam2Obj.transform.position = new Vector3(8f, 20f, -28f);
+            cam2Obj.transform.LookAt(Vector3.zero);
+            var camCtrl2 = cam2Obj.AddComponent<SplitScreenCamera>();
+            camCtrl2.TargetTransform = _player2Ghost != null ? _player2Ghost.transform : null;
+            camCtrl2.Distance        = -GameSettings.CameraOffset.z;
+            camCtrl2.HeightOffset    = GameSettings.CameraOffset.y;
+            camCtrl2.SideOffset      = GameSettings.CameraOffset.x;
+            cam2Obj.AddComponent<HDAdditionalCameraData>();
+            cam2.farClipPlane = 600f;
+        }
+        else
+        {
+            // Single-screen: Player 1 camera – full screen, positioned between P1 and companion
+            var cam1Obj  = new GameObject("Camera_P1");
+            cam1Obj.transform.SetParent(_cameraRig.transform);
+            var cam1 = cam1Obj.AddComponent<Camera>();
+            cam1.rect = new Rect(0f, 0f, 1f, 1f);  // Full screen
+            cam1Obj.transform.position = new Vector3(0f, 20f, -28f);  // Center between both players
+            cam1Obj.transform.LookAt(Vector3.zero);
+            var camCtrl1 = cam1Obj.AddComponent<SplitScreenCamera>();
+            camCtrl1.TargetTransform = _player1 != null ? _player1.transform : null;
+            camCtrl1.Distance        = -GameSettings.CameraOffset.z;
+            camCtrl1.HeightOffset    = GameSettings.CameraOffset.y;
+            camCtrl1.SideOffset      = 0f;  // Center camera, no side offset
+            cam1Obj.AddComponent<HDAdditionalCameraData>();
+            cam1.farClipPlane = 600f;
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
