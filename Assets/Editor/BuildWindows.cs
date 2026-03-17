@@ -1,4 +1,5 @@
 using UnityEditor;
+using UnityEditor.Build;
 using System.IO;
 
 public class BuildWindows
@@ -6,19 +7,20 @@ public class BuildWindows
     [MenuItem("Build/Build for Windows")]
     public static void BuildForWindows()
     {
-        string buildPath = "Builds/Windows/NinjaStrike.exe";
+        string buildDir = "Builds/Windows";
+        string buildPath = buildDir + "/NinjaStrike.exe";
 
-        // Ensure directory exists
-        Directory.CreateDirectory("Builds/Windows");
+        if (!Directory.Exists(buildDir))
+            Directory.CreateDirectory(buildDir);
 
-        // Get all scenes enabled in Build Settings
-        string[] scenes = GetEnabledScenes();
+        // Reset to x86_64 for Windows build
+        PlayerSettings.SetArchitecture(NamedBuildTarget.Standalone, 0);
 
-        if (scenes.Length == 0)
-        {
-            UnityEngine.Debug.LogError("❌ No scenes are enabled in Build Settings!");
-            return;
-        }
+        EditorUserBuildSettings.selectedStandaloneTarget = BuildTarget.StandaloneWindows64;
+        EditorUserBuildSettings.standaloneBuildSubtarget = StandaloneBuildSubtarget.Player;
+
+        // Using the same bootstrapper scene as it's the standard entry point
+        string[] scenes = { "Assets/BootstrapperScene.unity" };
 
         UnityEngine.Debug.Log("🏗️ Starting Windows Build (x86_64)...");
         
@@ -33,15 +35,4 @@ public class BuildWindows
         UnityEngine.Debug.Log("✅ Windows Build complete! Output: " + buildPath);
     }
 
-    private static string[] GetEnabledScenes()
-    {
-        var scenes = EditorBuildSettings.scenes;
-        var enabledScenes = new System.Collections.Generic.List<string>();
-        foreach (var scene in scenes)
-        {
-            if (scene.enabled)
-                enabledScenes.Add(scene.path);
-        }
-        return enabledScenes.ToArray();
-    }
 }

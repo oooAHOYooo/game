@@ -5,5 +5,9 @@
 public static class BuildInfo
 {
     public const string Version   = "0.1.0";
+<<<<<<< HEAD
+    public const string BuildTime = "2026-03-16  14:31";
+=======
     public const string BuildTime = "2026-03-14  12:12";
+>>>>>>> 8e810e5690dab86ac8de7c21cfeecb4810dd8e25
 }

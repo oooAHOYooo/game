@@ -229,6 +229,14 @@ public class EnemyAI : MonoBehaviour
         float targetSpeed = horizontalSpeed / MoveSpeed;
         _speedBlend = Mathf.Lerp(_speedBlend, targetSpeed > 0.1f ? targetSpeed : 0f, Time.deltaTime * 5f);
 
+<<<<<<< HEAD
+        if (_anim.runtimeAnimatorController != null && _anim.isActiveAndEnabled)
+        {
+            _anim.SetFloat("Speed", _speedBlend);
+            _anim.SetBool("IsFlying", _base.IsFlying);
+            _anim.SetBool("IsAttacking", _isActing);
+        }
+=======
         bool grounded = Physics.Raycast(transform.position + Vector3.up * 0.1f, Vector3.down, 0.35f);
 
         _anim.SetFloat("Speed",      _speedBlend);
@@ -237,6 +245,7 @@ public class EnemyAI : MonoBehaviour
         _anim.SetBool("IsAttacking", _isActing);
         // Enemies cycle through punch/kick so their attacks look varied
         _anim.SetInteger("AttackType", _isActing ? (Mathf.FloorToInt(Time.time * 2f) % 4 + 1) : 0);
+>>>>>>> 8e810e5690dab86ac8de7c21cfeecb4810dd8e25
     }
 
     // ─────────────────────────────────────────────────────────────────────

@@ -34,13 +34,13 @@ public class IslandGenerator : MonoBehaviour
         BuildTerrain();
         BuildOcean();
         BuildBeachRing();
-        PlaceTrees(GameSettings.TreeCount + 30);          // more lush vegetation
-        PlaceRocks(GameSettings.RockCount + 15);
-        PlaceBamboo(80);                                  // Bamboo Grove biome
-        PlaceGrassPatches(120);                           // denser grass
-        PlaceAncientRuins(18);                            // the new ancient ruins
-        PlaceHazards(15);                                 // Biome-specific hazards
-        PlacePowerUps(5);                                 // Exploration rewards
+        PlaceTrees(GameSettings.TreeCount);               // was GameSettings.TreeCount + 30
+        PlaceRocks(GameSettings.RockCount);               // was GameSettings.RockCount + 15
+        PlaceBamboo(10);                                  // was 80
+        PlaceGrassPatches(20);                            // was 120
+        PlaceAncientRuins(3);                             // was 18
+        PlaceHazards(3);                                  // was 15
+        PlacePowerUps(2);                                 // was 5
         BuildSkybox();
     }
 

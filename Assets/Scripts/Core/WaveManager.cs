@@ -454,9 +454,14 @@ public class WaveManager : MonoBehaviour
         float jitter = Random.Range(-10f, 10f);
         Vector3 pos = new Vector3(
             Mathf.Cos(angle) * (SpawnEdgeRadius + jitter),
-            IslandGenerator.WaterLevel + 1f,
+            100f,
             Mathf.Sin(angle) * (SpawnEdgeRadius + jitter)
         );
+        if (Physics.Raycast(pos, Vector3.down, out RaycastHit hit, 200f))
+            pos.y = hit.point.y + 0.5f;
+        else
+            pos.y = IslandGenerator.WaterLevel + 1f;
+
         return pos;
     }
 

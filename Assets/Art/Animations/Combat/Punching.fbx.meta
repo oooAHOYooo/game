@@ -1,11 +1,19 @@
 fileFormatVersion: 2
+<<<<<<< HEAD
+guid: 92ff80c8cd4ebef6a931392e38774f17
+=======
 guid: 61a33c9438c0d90058c61d73591e5ca0
+>>>>>>> 8e810e5690dab86ac8de7c21cfeecb4810dd8e25
 ModelImporter:
   serializedVersion: 24200
   internalIDToNameTable: []
   externalObjects: {}
   materials:
+<<<<<<< HEAD
+    materialImportMode: 2
+=======
     materialImportMode: 0
+>>>>>>> 8e810e5690dab86ac8de7c21cfeecb4810dd8e25
     materialName: 0
     materialSearch: 1
     materialLocation: 1
@@ -29,6 +37,9 @@ ModelImporter:
     animationWrapMode: 0
     extraExposedTransformPaths: []
     extraUserProperties: []
+<<<<<<< HEAD
+    clipAnimations: []
+=======
     clipAnimations:
     - serializedVersion: 16
       name: mixamo.com
@@ -59,6 +70,7 @@ ModelImporter:
       maskType: 3
       maskSource: {instanceID: 0}
       additiveReferencePoseFrame: 0
+>>>>>>> 8e810e5690dab86ac8de7c21cfeecb4810dd8e25
     isReadable: 0
   meshes:
     lODScreenPercentages: []
@@ -111,6 +123,10 @@ ModelImporter:
   importAnimation: 1
   humanDescription:
     serializedVersion: 3
+<<<<<<< HEAD
+    human: []
+    skeleton: []
+=======
     human:
     - boneName: mixamorig1:Hips
       humanName: Hips
@@ -859,6 +875,7 @@ ModelImporter:
       position: {x: -0, y: 0.061799996, z: 0}
       rotation: {x: 0, y: -0, z: -0, w: 1}
       scale: {x: 1, y: 1, z: 1}
+>>>>>>> 8e810e5690dab86ac8de7c21cfeecb4810dd8e25
     armTwist: 0.5
     foreArmTwist: 0.5
     upperLegTwist: 0.5
@@ -875,7 +892,11 @@ ModelImporter:
   autoGenerateAvatarMappingIfUnspecified: 1
   animationType: 3
   humanoidOversampling: 1
+<<<<<<< HEAD
+  avatarSetup: 0
+=======
   avatarSetup: 1
+>>>>>>> 8e810e5690dab86ac8de7c21cfeecb4810dd8e25
   addHumanoidExtraRootOnlyWhenUsingAvatar: 1
   importBlendShapeDeformPercent: 1
   remapMaterialsIfMaterialImportModeIsNone: 0

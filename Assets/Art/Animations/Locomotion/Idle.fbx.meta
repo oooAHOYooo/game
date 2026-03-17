@@ -1,11 +1,19 @@
 fileFormatVersion: 2
+<<<<<<< HEAD
+guid: c96da8b83564565f79d9820648af377f
+=======
 guid: 385f2d1cd8cb6f6469d78ae2c621b991
+>>>>>>> 8e810e5690dab86ac8de7c21cfeecb4810dd8e25
 ModelImporter:
   serializedVersion: 24200
   internalIDToNameTable: []
   externalObjects: {}
   materials:
+<<<<<<< HEAD
+    materialImportMode: 2
+=======
     materialImportMode: 0
+>>>>>>> 8e810e5690dab86ac8de7c21cfeecb4810dd8e25
     materialName: 0
     materialSearch: 1
     materialLocation: 1
@@ -33,13 +41,52 @@ ModelImporter:
     - serializedVersion: 16
       name: mixamo.com
       takeName: mixamo.com
+<<<<<<< HEAD
+      firstFrame: 0
+      lastFrame: 100
+=======
       internalID: -203655887218126122
       firstFrame: 0
       lastFrame: 500
+>>>>>>> 8e810e5690dab86ac8de7c21cfeecb4810dd8e25
       wrapMode: 0
       orientationOffsetY: 0
       level: 0
       cycleOffset: 0
+<<<<<<< HEAD
+      loopTime: 1
+      loopPose: 1
+      loopBlend: 0
+      loopBlendOrientation: 0
+      loopBlendPositionY: 0
+      loopBlendPositionXZ: 0
+      keepAdditionalRotationData: 0
+      heightFromFeet: 0
+      mirror: 0
+      bodyMask: 01000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000
+      curve:
+        serializedVersion: 2
+        m_Curve: []
+      events: []
+      transformMask: []
+      maskType: 1
+      maskSource: {instanceID: 0}
+      additiveReferencePoseClip: {instanceID: 0}
+      additiveReferencePoseFrame: 0
+      hasAdditiveReferencePose: 0
+      loopTime: 1
+      loopPose: 1
+      lockRootRotation: 1
+      lockRootHeightY: 1
+      lockRootPositionXZ: 1
+      keepOriginalOrientation: 1
+      keepOriginalHeightY: 1
+      keepOriginalPositionXZ: 1
+      heightOffset: 0
+      rotationOffset: 0
+      index: 0
+      resources: []
+=======
       loop: 0
       hasAdditiveReferencePose: 0
       loopTime: 0
@@ -59,6 +106,7 @@ ModelImporter:
       maskType: 3
       maskSource: {instanceID: 0}
       additiveReferencePoseFrame: 0
+>>>>>>> 8e810e5690dab86ac8de7c21cfeecb4810dd8e25
     isReadable: 0
   meshes:
     lODScreenPercentages: []
@@ -111,6 +159,10 @@ ModelImporter:
   importAnimation: 1
   humanDescription:
     serializedVersion: 3
+<<<<<<< HEAD
+    human: []
+    skeleton: []
+=======
     human:
     - boneName: mixamorig1:Hips
       humanName: Hips
@@ -864,6 +916,7 @@ ModelImporter:
       position: {x: -0.000024786703, y: 0.018884283, z: -7.556858e-10}
       rotation: {x: 0, y: -0, z: -0, w: 1}
       scale: {x: 1, y: 1, z: 1}
+>>>>>>> 8e810e5690dab86ac8de7c21cfeecb4810dd8e25
     armTwist: 0.5
     foreArmTwist: 0.5
     upperLegTwist: 0.5
@@ -880,7 +933,11 @@ ModelImporter:
   autoGenerateAvatarMappingIfUnspecified: 1
   animationType: 3
   humanoidOversampling: 1
+<<<<<<< HEAD
+  avatarSetup: 0
+=======
   avatarSetup: 1
+>>>>>>> 8e810e5690dab86ac8de7c21cfeecb4810dd8e25
   addHumanoidExtraRootOnlyWhenUsingAvatar: 1
   importBlendShapeDeformPercent: 1
   remapMaterialsIfMaterialImportModeIsNone: 0

@@ -33,8 +33,8 @@ public static class GameSettings
     public static float IslandRadius = 150f;
     public static float TerrainMaxHeight = 18f;
     public static float WaterLevel = 0.3f;
-    public static int TreeCount = 120;
-    public static int RockCount = 50;
+    public static int TreeCount = 10;
+    public static int RockCount = 5;
 
     // ── Wave & Enemies ──────────────────────────────────────────────────
     public static float VillageMaxHP = 500f;
